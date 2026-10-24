@@ -1,0 +1,90 @@
+# S3-compatible object store for hack/e2e.sh and hack/demo.sh: SeaweedFS in one container.
+# Test credentials only, never reuse them. In-cluster Service: s3.default.svc:8333.
+#
+# Why not MinIO: MinIO removed its images from Docker Hub in September 2026 and Quay now needs a login,
+# so `minio/minio` cannot be pulled any more (that is what broke the step 6 e2e run). BackupVouch only
+# speaks plain S3 (minio-go client library), so any S3 server works; see docs/DECISIONS.md D20.
+#
+# VERIFY: the image tag exists on Docker Hub. SeaweedFS 4.42 or newer is needed (older releases can lose
+# a freshly written object). `mini` runs master, volume server, filer and S3 gateway in one process and
+# `-bucket` creates the bucket at start.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-creds
+  namespace: default
+type: Opaque
+stringData:
+  # The two keys the BackupPolicy reads (credentialsSecretRef).
+  accessKey: e2eaccesskey
+  secretKey: e2esecretkey123
+  # The same pair as the store's own identity file. Keep both in sync.
+  s3config.json: |
+    {
+      "identities": [
+        {
+          "name": "e2e",
+          "credentials": [{ "accessKey": "e2eaccesskey", "secretKey": "e2esecretkey123" }],
+          "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: s3
+  template:
+    metadata:
+      labels:
+        app: s3
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:4.42
+          args:
+            - mini
+            - -dir=/data
+            - -s3.config=/etc/seaweedfs/s3config.json
+            - -bucket=backups
+          ports:
+            - containerPort: 8333
+          readinessProbe:
+            tcpSocket:
+              port: 8333
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 60
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: s3config
+              mountPath: /etc/seaweedfs
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: s3config
+          secret:
+            secretName: s3-creds
+            items:
+              - key: s3config.json
+                path: s3config.json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3
+  namespace: default
+spec:
+  selector:
+    app: s3
+  ports:
+    - port: 8333
+      targetPort: 8333

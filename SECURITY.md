@@ -75,12 +75,12 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Allow egress to S3 storage endpoint (e.g. MinIO)
+    # Allow egress to S3 storage endpoint (your in-cluster S3 service)
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: minio
+              app.kubernetes.io/name: s3
       ports:
         - protocol: TCP
-          port: 9000
+          port: 8333
 ```

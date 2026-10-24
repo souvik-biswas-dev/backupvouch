@@ -62,7 +62,7 @@ my checks, and reports whether the backup is really usable. v1 supports PostgreS
 It's a public portfolio project for backend/DevOps roles.
 
 Hard constraints
-- Zero cost: kind cluster locally, MinIO in-cluster as S3 storage, no cloud accounts,
+- Zero cost: kind cluster locally, an in-cluster S3 store (SeaweedFS since step 7a, MinIO images are gone) as S3 storage, no cloud accounts,
   no paid APIs.
 - Keep the kubebuilder scaffold layout (api/, internal/controller/, cmd/, config/).
 - CRD: group backup.backupvouch.dev, version v1alpha1, kind BackupPolicy.

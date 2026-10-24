@@ -16,7 +16,7 @@ Small teams running PostgreSQL on Kubernetes (including k3s and kind) who want e
 2. After every backup, restore it into a throwaway Postgres and run user-defined SQL checks.
 3. Report the result in the resource status, Kubernetes events, and Prometheus metrics, so it can be alerted on.
 4. Measure restore duration, so the team knows its real recovery time.
-5. Be free to run and demo locally (kind and MinIO), with no cloud account.
+5. Be free to run and demo locally (kind and an in-cluster S3 store), with no cloud account.
 
 ## Non-goals (v1)
 

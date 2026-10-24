@@ -1,5 +1,9 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+# Image tags are pinned, never :latest. The operator image follows VERSION; the default runner image
+# (and its tag) is the DefaultRunnerImage constant in internal/jobs/backup.go, published by
+# .github/workflows/publish-images.yml from a tag that equals it.
+VERSION ?= v0.1.0
+IMG ?= ghcr.io/souvik-biswas-dev/backupvouch:$(VERSION)
 # YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
 YEAR ?= $(shell date +%Y)
 
@@ -77,6 +81,26 @@ RUNNER_IMG ?= $(shell sed -n 's/.*DefaultRunnerImage = "\(.*\)"/\1/p' internal/j
 .PHONY: e2e
 e2e: ## Run hack/e2e.sh: backup, verify, then sabotage and expect a failed verification.
 	KIND=$(KIND) E2E_CLUSTER=$(KIND_CLUSTER) bash hack/e2e.sh
+<<<<<<< HEAD
+
+# The narrated demo (hack/demo.sh): same steps as e2e, with commentary, status and events after each stage.
+# The kind cluster is kept afterwards (DEMO_KEEP_CLUSTER=false deletes it). Needs docker, kind and kubectl.
+DEMO_CLUSTER ?= backupvouch-demo
+
+.PHONY: demo
+demo: ## Run the narrated demo in a kind cluster: backup, verify OK, sabotage, verify FAILED.
+	KIND=$(KIND) DEMO_CLUSTER=$(DEMO_CLUSTER) bash hack/demo.sh
+
+.PHONY: demo-clean
+demo-clean: ## Delete the demo kind cluster.
+	$(KIND) delete cluster --name $(DEMO_CLUSTER)
+
+.PHONY: demo-transcript
+demo-transcript: ## Run the demo and save the real output to dist/demo-transcript.txt (for docs/TESTING.md).
+	mkdir -p dist
+	KIND=$(KIND) DEMO_CLUSTER=$(DEMO_CLUSTER) bash -o pipefail -c 'bash hack/demo.sh 2>&1 | tee dist/demo-transcript.txt'
+=======
+>>>>>>> origin/main
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -136,11 +160,28 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	- $(CONTAINER_TOOL) buildx rm backupvouch-builder
 	rm Dockerfile.cross
 
+# Writes dist/install.yaml (CRD, RBAC, Deployment) with the operator image pinned to IMG.
+# The kustomization edit is undone afterwards, so the working tree stays clean.
 .PHONY: build-installer
-build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+build-installer: manifests generate kustomize ## Generate dist/install.yaml with pinned image tags (IMG must not be :latest).
+	@img="$(IMG)"; name="$${img##*/}"; \
+	case "$$name" in \
+	  *:latest|*:|"") echo "IMG must have a pinned tag, not :latest or empty (got '$$img')" >&2; exit 1;; \
+	  *:*) ;; \
+	  *) echo "IMG must include a tag (got '$$img')" >&2; exit 1;; \
+	esac
 	mkdir -p dist
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
+	@set -e; \
+	cp config/manager/kustomization.yaml "$(LOCALBIN)/manager-kustomization.bak"; \
+	trap 'cp "$(LOCALBIN)/manager-kustomization.bak" config/manager/kustomization.yaml' EXIT; \
+	( cd config/manager && "$(KUSTOMIZE)" edit set image controller=$(IMG) ); \
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	@if grep -nE 'image:.*:latest' dist/install.yaml; then \
+	  echo "dist/install.yaml contains a :latest image" >&2; rm -f dist/install.yaml; exit 1; \
+	fi
+	@echo "wrote dist/install.yaml"
+	@echo "  operator image:       $(IMG)"
+	@echo "  default runner image: $(RUNNER_IMG) (other runner images need --allowed-runner-images, see docs/INSTALL.md)"
 
 ##@ Deployment
 

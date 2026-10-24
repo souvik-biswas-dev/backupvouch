@@ -1,0 +1,88 @@
+# Source PostgreSQL with seed data for hack/e2e.sh and hack/demo.sh. Test credentials only, never reuse them.
+# The major version matches the runner image (postgres 16, see docs/DECISIONS.md D15).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pg-creds
+  namespace: default
+type: Opaque
+stringData:
+  username: app
+  password: e2e-password
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pg-seed
+  namespace: default
+data:
+  seed.sql: |
+    CREATE TABLE users (
+      id    serial PRIMARY KEY,
+      name  text NOT NULL,
+      email text NOT NULL UNIQUE
+    );
+    INSERT INTO users (name, email) VALUES
+      ('Ada',   'ada@example.test'),
+      ('Grace', 'grace@example.test'),
+      ('Linus', 'linus@example.test');
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16.8-alpine3.21
+          env:
+            - name: POSTGRES_DB
+              value: app
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: pg-creds, key: username }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: pg-creds, key: password }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app", "-d", "app"]
+            initialDelaySeconds: 5
+            periodSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: seed
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: seed
+          configMap:
+            name: pg-seed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
