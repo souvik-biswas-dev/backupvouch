@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 	"strconv"
 	"time"
 
@@ -30,11 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 
 	backupv1alpha1 "github.com/souvik-biswas-dev/backupvouch/api/v1alpha1"
 	"github.com/souvik-biswas-dev/backupvouch/internal/jobs"
@@ -47,7 +47,7 @@ import (
 type BackupPolicyReconciler struct {
 	client.Client
 	Scheme                     *runtime.Scheme
-	Recorder                   record.EventRecorder
+	Recorder                   recorder.EventRecorder
 	AllowedRunnerImagePatterns []string
 	DefaultRunnerImage         string
 	NowFunc                    func() time.Time
@@ -81,7 +81,7 @@ func (r *BackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err := r.Update(ctx, &policy); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 	}
 
 	// 2. Validate Spec (SpecValid condition)
@@ -120,7 +120,7 @@ func (r *BackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.reconcilePruning(ctx, &policy, now)
 	default:
 		policy.Status.Phase = backupv1alpha1.PhaseIdle
-		return ctrl.Result{Requeue: true}, r.Status().Update(ctx, &policy)
+		return ctrl.Result{RequeueAfter: time.Millisecond}, r.Status().Update(ctx, &policy)
 	}
 }
 
@@ -172,7 +172,7 @@ func (r *BackupPolicyReconciler) reconcileIdle(
 		if err := r.Status().Update(ctx, policy); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update status to BackingUp: %w", err)
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 	}
 
 	// Not due: requeue for next run
@@ -181,10 +181,7 @@ func (r *BackupPolicyReconciler) reconcileIdle(
 		return ctrl.Result{}, fmt.Errorf("failed to compute next run: %w", err)
 	}
 
-	requeueDuration := nextRun.Sub(now)
-	if requeueDuration < time.Second {
-		requeueDuration = time.Second
-	}
+	requeueDuration := max(nextRun.Sub(now), time.Second)
 
 	policy.Status.Phase = backupv1alpha1.PhaseIdle
 	policy.Status.CurrentRunID = 0
@@ -302,7 +299,7 @@ func (r *BackupPolicyReconciler) reconcileBackingUp(
 		if err := r.Create(ctx, vJob); client.IgnoreAlreadyExists(err) != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to create verify job: %w", err)
 		}
-		return ctrl.Result{Requeue: true}, r.Status().Update(ctx, policy)
+		return ctrl.Result{RequeueAfter: time.Millisecond}, r.Status().Update(ctx, policy)
 	}
 
 	// Verification disabled
@@ -314,7 +311,7 @@ func (r *BackupPolicyReconciler) reconcileBackingUp(
 		"verification is disabled",
 	)
 	policy.Status.Phase = backupv1alpha1.PhasePruning
-	return ctrl.Result{Requeue: true}, r.Status().Update(ctx, policy)
+	return ctrl.Result{RequeueAfter: time.Millisecond}, r.Status().Update(ctx, policy)
 }
 
 func (r *BackupPolicyReconciler) reconcileVerifying(
@@ -395,7 +392,7 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 		metrics.UpdatePolicyMetrics(policy)
 
 		policy.Status.Phase = backupv1alpha1.PhasePruning
-		return ctrl.Result{Requeue: true}, r.Status().Update(ctx, policy)
+		return ctrl.Result{RequeueAfter: time.Millisecond}, r.Status().Update(ctx, policy)
 	}
 
 	// Verification failed
@@ -470,7 +467,7 @@ func (r *BackupPolicyReconciler) reconcilePruning(
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{Requeue: true}, nil
+	return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 }
 
 func (r *BackupPolicyReconciler) startReverify(
@@ -500,7 +497,7 @@ func (r *BackupPolicyReconciler) startReverify(
 	if err := r.Status().Update(ctx, policy); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{Requeue: true}, nil
+	return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 }
 
 func (r *BackupPolicyReconciler) failBackup(
@@ -595,19 +592,19 @@ func (r *BackupPolicyReconciler) handleDeletion(
 
 func (r *BackupPolicyReconciler) recordHistory(policy *backupv1alpha1.BackupPolicy) {
 	nowMeta := metav1.NewTime(r.now())
-	record := backupv1alpha1.RunRecord{
+	runRec := backupv1alpha1.RunRecord{
 		RunID: policy.Status.CurrentRunID,
 		Time:  &nowMeta,
 	}
 	if policy.Status.LastBackup != nil {
-		record.ObjectKey = policy.Status.LastBackup.ObjectKey
-		record.BackupResult = policy.Status.LastBackup.Result
+		runRec.ObjectKey = policy.Status.LastBackup.ObjectKey
+		runRec.BackupResult = policy.Status.LastBackup.Result
 	}
 	if policy.Status.LastVerification != nil {
-		record.VerificationResult = policy.Status.LastVerification.Result
+		runRec.VerificationResult = policy.Status.LastVerification.Result
 	}
 
-	history := append([]backupv1alpha1.RunRecord{record}, policy.Status.History...)
+	history := append([]backupv1alpha1.RunRecord{runRec}, policy.Status.History...)
 	if len(history) > 10 {
 		history = history[:10]
 	}
@@ -636,8 +633,14 @@ func (r *BackupPolicyReconciler) cleanupOldJobs(ctx context.Context, policy *bac
 	for id := range runIDsMap {
 		runIDs = append(runIDs, id)
 	}
-	sort.Slice(runIDs, func(i, j int) bool {
-		return runIDs[i] > runIDs[j] // newest first
+	slices.SortFunc(runIDs, func(a, b int64) int {
+		if a > b {
+			return -1
+		}
+		if a < b {
+			return 1
+		}
+		return 0
 	})
 
 	if len(runIDs) <= 3 {
@@ -710,7 +713,7 @@ func (r *BackupPolicyReconciler) emitEvent(
 	eventType, reason, message string,
 ) {
 	if r.Recorder != nil {
-		r.Recorder.Event(policy, eventType, reason, message)
+		r.Recorder.Eventf(policy, nil, eventType, reason, reason, "%s", message)
 	}
 }
 
@@ -748,7 +751,7 @@ func isValidBackupFailureReason(reason string) bool {
 // SetupWithManager sets up the controller with the Manager.
 func (r *BackupPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorderFor("backupvouch-controller")
+		r.Recorder = mgr.GetEventRecorder("backupvouch-controller")
 	}
 	if r.DefaultRunnerImage == "" {
 		r.DefaultRunnerImage = jobs.DefaultRunnerImage
