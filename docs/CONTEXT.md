@@ -13,7 +13,7 @@ Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs Pos
 | 2 | API types | done; manifests and code generated, tests passing |
 | 3 | scheduling and backup Job | done; internal/schedule, internal/jobs, cmd/runner, Dockerfile.runner, tests passing |
 | 4 | restore verification | done; cmd/runner verify, internal/checks, internal/jobs verify builder, tests passing |
-| 5 | controller | not started |
+| 5 | controller | done; reconcile loop, state machine, prune runner & builder, metrics, validation, envtest passing |
 | 6 | tests and CI | not started |
 | 7 | packaging and demo | not started |
 | 8 | optional dashboard | not started |
@@ -74,9 +74,18 @@ Not done in step 2 (by design): cron validation (needs robfig/cron, step 3), the
 3. `cmd/runner`: `verify` subcommand downloading S3 dump, checking SHA-256 (`ChecksumMismatch`), running scratch Postgres on Unix socket, executing `pg_restore` (`RestoreFailed`), running checks (`CheckFailed`), measuring duration, clean shutdown/cleanup in defer, structured JSON termination message.
 4. `SECURITY.md`: added recommended `NetworkPolicy` manifest for verification Jobs restricting egress strictly to DNS and S3 storage endpoints.
 
+## Step 5 review: what changed and why
+
+1. `cmd/runner`: `prune` subcommand listing S3 objects, sorting newest first, keeping `keepLast` objects, protecting the newest verified backup (`PROTECTED_KEY`), and recording results in `/dev/termination-log`.
+2. `internal/jobs`: `BuildPruneJob` constructing hardened `batch/v1` Job (UID 70, `/tmp` emptyDir, storage secrets only, owner references).
+3. `internal/metrics`: Prometheus gauges registered with controller-runtime (`backupvouch_last_backup_timestamp_seconds`, `backupvouch_last_verified_timestamp_seconds`, `backupvouch_verification_success`, `backupvouch_restore_duration_seconds`) with label updates and deletion cleanup.
+4. `internal/validation`: cron schedule, IANA timezone, and runner image allow-list validation (`SpecValid` condition).
+5. `internal/controller`: full reconciliation state machine (`Idle` -> `BackingUp` -> `Verifying` -> `Pruning` -> `Idle`), SecretMissing early detection from Pod waiting reason, manual re-verification via `backupvouch.dev/reverify` annotation, finalizer cleanup of owned Jobs, and history ring buffer (last 10 runs).
+6. Tests: envtest integration suite covering the entire state machine, validation, and finalizers.
+
 ## Next
 
-Step 5 (the controller: reconcile loop, state machine, idempotency, failure handling, finalizer, Prometheus metrics, RBAC).
+Step 6 (tests and CI: kind e2e script, SABOTAGE test, GitHub Actions workflows).
 
 ## To verify locally
 

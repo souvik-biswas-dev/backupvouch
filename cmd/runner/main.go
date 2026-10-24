@@ -43,8 +43,10 @@ func main() {
 			os.Exit(1)
 		}
 	case "prune":
-		fmt.Fprintf(os.Stderr, "prune subcommand will be implemented in Step 4/5\n")
-		os.Exit(1)
+		if err := RunPrune(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "prune failed: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q. Expected: backup, verify, or prune\n", subcommand)
 		os.Exit(1)
