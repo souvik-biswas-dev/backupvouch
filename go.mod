@@ -3,6 +3,7 @@ module github.com/souvik-biswas-dev/backupvouch
 go 1.26.0
 
 require (
+	github.com/lib/pq v1.12.3
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/onsi/ginkgo/v2 v2.27.4
 	github.com/onsi/gomega v1.39.0
