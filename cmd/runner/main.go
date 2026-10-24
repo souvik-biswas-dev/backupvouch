@@ -22,6 +22,8 @@ import (
 	"os"
 )
 
+const envTrue = "true"
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: runner <backup|verify|prune>\n")

@@ -82,7 +82,7 @@ func LoadBackupConfig() (*BackupConfig, error) {
 		StorageEndpoint: os.Getenv("STORAGE_ENDPOINT"),
 		StorageBucket:   os.Getenv("STORAGE_BUCKET"),
 		StoragePrefix:   os.Getenv("STORAGE_PREFIX"),
-		StorageUseTLS:   os.Getenv("STORAGE_USE_TLS") == "true",
+		StorageUseTLS:   os.Getenv("STORAGE_USE_TLS") == envTrue,
 		StorageAccess:   os.Getenv("STORAGE_ACCESS_KEY"),
 		StorageSecret:   os.Getenv("STORAGE_SECRET_KEY"),
 		ObjectKey:       os.Getenv("OBJECT_KEY"),

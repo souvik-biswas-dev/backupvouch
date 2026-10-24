@@ -56,7 +56,7 @@ func TestBuildVerifyResult(t *testing.T) {
 
 	t.Run("large message truncates passed checks and keeps failed checks", func(t *testing.T) {
 		// Generate 50 passed checks and 2 failed checks with max allowed message sizes
-		checkResults := make([]checks.CheckResult, 0)
+		checkResults := make([]checks.CheckResult, 0, 42)
 		for i := range 40 {
 			checkResults = append(checkResults, checks.CheckResult{
 				Name:    fmt.Sprintf("passed-check-%d", i),
