@@ -192,7 +192,7 @@ func main() {
 
 	var allowedPatterns []string
 	if allowedRunnerImages != "" {
-		for _, p := range strings.Split(allowedRunnerImages, ",") {
+		for p := range strings.SplitSeq(allowedRunnerImages, ",") {
 			if trimmed := strings.TrimSpace(p); trimmed != "" {
 				allowedPatterns = append(allowedPatterns, trimmed)
 			}
