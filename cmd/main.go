@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -80,6 +81,13 @@ func main() {
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+	var allowedRunnerImages string
+	flag.StringVar(
+		&allowedRunnerImages,
+		"allowed-runner-images",
+		"",
+		"Comma-separated list of allowed runner image patterns (D14).",
+	)
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	opts := zap.Options{
@@ -182,9 +190,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	var allowedPatterns []string
+	if allowedRunnerImages != "" {
+		for _, p := range strings.Split(allowedRunnerImages, ",") {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				allowedPatterns = append(allowedPatterns, trimmed)
+			}
+		}
+	}
+
 	if err := (&controller.BackupPolicyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:                     mgr.GetClient(),
+		Scheme:                     mgr.GetScheme(),
+		AllowedRunnerImagePatterns: allowedPatterns,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "backuppolicy")
 		os.Exit(1)
