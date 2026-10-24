@@ -11,10 +11,31 @@ spec:
     kind: BackupPolicy
     listKind: BackupPolicyList
     plural: backuppolicies
+    shortNames:
+    - bp
     singular: backuppolicy
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.schedule
+      name: Schedule
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.lastBackup.time
+      name: Last Backup
+      type: date
+    - jsonPath: .status.conditions[?(@.type=="RestoreVerified")].status
+      name: Verified
+      type: string
+    - jsonPath: .status.lastVerification.restoreDurationSeconds
+      name: Restore Time
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: BackupPolicy is the Schema for the backuppolicies API
@@ -39,25 +60,273 @@ spec:
           spec:
             description: spec defines the desired state of BackupPolicy
             properties:
-              foo:
-                description: foo is an example field of BackupPolicy. Edit backuppolicy_types.go
-                  to remove/update
+              backupTimeoutSeconds:
+                default: 1800
+                description: backupTimeoutSeconds is the deadline of the backup Job.
+                format: int32
+                minimum: 1
+                type: integer
+              resources:
+                description: resources are applied to the runner containers.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This field depends on the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              retention:
+                default: {}
+                description: retention controls how many backups are kept.
+                properties:
+                  keepLast:
+                    default: 7
+                    description: |-
+                      keepLast is the number of newest backups to keep. The newest verified
+                      backup is never deleted, even if that means keeping more.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                type: object
+              runnerImage:
+                description: |-
+                  runnerImage is the image that runs backup, verify and prune. It must
+                  match the operator's allow-list of runner images. If empty, the
+                  operator's default image is used. A pinned tag is recommended.
+                maxLength: 512
                 type: string
+              schedule:
+                description: |-
+                  schedule is a five-field cron expression. The controller validates it
+                  fully and reports SpecValid=False if it is not valid.
+                maxLength: 256
+                minLength: 9
+                pattern: ^\S+(\s+\S+){4}$
+                type: string
+              source:
+                description: source is the database to back up.
+                properties:
+                  credentialsSecretRef:
+                    description: |-
+                      credentialsSecretRef names a Secret with the keys username and password.
+                      Use a read-only database role.
+                    properties:
+                      name:
+                        description: name is the name of the Secret.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  database:
+                    description: database is the name of the database to dump.
+                    maxLength: 63
+                    minLength: 1
+                    type: string
+                  engine:
+                    default: postgres
+                    description: engine is the database engine. Only postgres is supported
+                      in v1.
+                    enum:
+                    - postgres
+                    type: string
+                  host:
+                    description: host is the host name or service name of the database
+                      server.
+                    maxLength: 253
+                    minLength: 1
+                    type: string
+                  port:
+                    default: 5432
+                    description: port is the TCP port of the database server.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - credentialsSecretRef
+                - database
+                - host
+                type: object
+              storage:
+                description: storage is where backups are stored.
+                properties:
+                  bucket:
+                    description: bucket is the bucket name.
+                    maxLength: 63
+                    minLength: 3
+                    pattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
+                    type: string
+                  credentialsSecretRef:
+                    description: credentialsSecretRef names a Secret with the keys
+                      accessKey and secretKey.
+                    properties:
+                      name:
+                        description: name is the name of the Secret.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  endpoint:
+                    description: endpoint is host:port of the S3-compatible storage.
+                    maxLength: 260
+                    minLength: 3
+                    pattern: ^[A-Za-z0-9.-]+:[0-9]{1,5}$
+                    type: string
+                  prefix:
+                    description: prefix is prepended to every object key, for example
+                      "app/".
+                    maxLength: 512
+                    type: string
+                  useTLS:
+                    default: false
+                    description: useTLS makes the runner connect to the endpoint over
+                      TLS.
+                    type: boolean
+                required:
+                - bucket
+                - credentialsSecretRef
+                - endpoint
+                type: object
+              suspend:
+                default: false
+                description: suspend pauses scheduling. Running Jobs finish.
+                type: boolean
+              timeZone:
+                default: UTC
+                description: timeZone is an IANA time zone name used to evaluate the
+                  schedule.
+                maxLength: 64
+                type: string
+              verify:
+                default: {}
+                description: verify controls restore verification.
+                properties:
+                  checks:
+                    description: checks are SQL checks run against the restored copy.
+                    items:
+                      description: Check is one SQL check run against the restored
+                        copy.
+                      properties:
+                        expect:
+                          default: "true"
+                          description: |-
+                            expect is the expected text of the single value. Booleans are compared
+                            as "true" or "false".
+                          type: string
+                        name:
+                          description: name identifies the check. It must be a DNS-label
+                            style name.
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                          type: string
+                        sql:
+                          description: |-
+                            sql is a single statement that returns exactly one row and one column.
+                            It runs only against the restored copy, in a read-only transaction.
+                          maxLength: 2000
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      - sql
+                      type: object
+                    maxItems: 20
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  enabled:
+                    default: true
+                    description: |-
+                      enabled turns verification on. If false, a run ends after the backup.
+                      It is a pointer so that an explicit false survives omitempty and the
+                      server-side default of true.
+                    type: boolean
+                  scratchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    default: 5Gi
+                    description: |-
+                      scratchSize is the size limit of the emptyDir that holds the downloaded
+                      dump and the scratch Postgres data. It must exceed the dump plus the
+                      restored database.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  timeoutSeconds:
+                    default: 900
+                    description: timeoutSeconds is the deadline of the verification
+                      Job.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                type: object
+            required:
+            - schedule
+            - source
+            - storage
             type: object
           status:
             description: status defines the observed state of BackupPolicy
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the BackupPolicy resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: conditions are SpecValid, BackupReady and RestoreVerified,
+                  see docs/API.md.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -116,10 +385,139 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              currentRunID:
+                description: |-
+                  currentRunID is the scheduled time (Unix timestamp) of the run in
+                  progress, absent when idle.
+                format: int64
+                type: integer
+              history:
+                description: history holds the last 10 runs, newest first.
+                items:
+                  description: RunRecord is one entry of the run history.
+                  properties:
+                    backupResult:
+                      description: backupResult is the outcome of the backup.
+                      enum:
+                      - Succeeded
+                      - Failed
+                      type: string
+                    objectKey:
+                      description: objectKey is the backup object of the run.
+                      type: string
+                    runID:
+                      description: runID is the scheduled time of the run as a Unix
+                        timestamp.
+                      format: int64
+                      type: integer
+                    time:
+                      description: time is when the run finished.
+                      format: date-time
+                      type: string
+                    verificationResult:
+                      description: verificationResult is the outcome of the verification,
+                        empty if none ran.
+                      enum:
+                      - Passed
+                      - Failed
+                      type: string
+                  required:
+                  - runID
+                  type: object
+                maxItems: 10
+                type: array
+              lastBackup:
+                description: lastBackup describes the last backup.
+                properties:
+                  message:
+                    description: message is a short reason on failure.
+                    type: string
+                  objectKey:
+                    description: objectKey is the key of the stored backup.
+                    type: string
+                  result:
+                    description: result is Succeeded or Failed.
+                    enum:
+                    - Succeeded
+                    - Failed
+                    type: string
+                  sha256:
+                    description: sha256 is the hex SHA-256 of the stored backup.
+                    type: string
+                  sizeBytes:
+                    description: sizeBytes is the size of the stored backup.
+                    format: int64
+                    type: integer
+                  time:
+                    description: time is when the backup finished.
+                    format: date-time
+                    type: string
+                type: object
+              lastReverifyID:
+                description: |-
+                  lastReverifyID is the last value of the backupvouch.dev/reverify
+                  annotation that was acted on.
+                format: int64
+                type: integer
+              lastRunID:
+                description: lastRunID is the runID of the most recent run that was
+                  started.
+                format: int64
+                type: integer
+              lastVerification:
+                description: lastVerification describes the last verification.
+                properties:
+                  failedChecks:
+                    description: failedChecks lists the names of checks that failed.
+                    items:
+                      type: string
+                    maxItems: 20
+                    type: array
+                  message:
+                    description: message is a short reason on failure.
+                    type: string
+                  objectKey:
+                    description: objectKey is the backup object that was verified.
+                    type: string
+                  restoreDurationSeconds:
+                    description: |-
+                      restoreDurationSeconds is the measured restore time in whole seconds.
+                      (CRDs avoid floating-point fields, so the runner's fractional value is
+                      rounded by the controller.)
+                    format: int64
+                    type: integer
+                  result:
+                    description: result is Passed or Failed.
+                    enum:
+                    - Passed
+                    - Failed
+                    type: string
+                  time:
+                    description: time is when the verification finished.
+                    format: date-time
+                    type: string
+                type: object
+              observedGeneration:
+                description: observedGeneration is the last spec generation reconciled.
+                format: int64
+                type: integer
+              phase:
+                description: 'phase is the current stage: Idle, BackingUp, Verifying
+                  or Pruning.'
+                enum:
+                - Idle
+                - BackingUp
+                - Verifying
+                - Pruning
+                type: string
             type: object
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: metadata.name must be at most 45 characters so Job names stay within
+            63 characters
+          rule: self.metadata.name.size() <= 45
     served: true
     storage: true
     subresources:

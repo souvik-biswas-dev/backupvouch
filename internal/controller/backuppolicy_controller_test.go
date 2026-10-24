@@ -54,7 +54,19 @@ var _ = Describe("BackupPolicy Controller", func() {
 						Name:      resourceName,
 						Namespace: resourceNamespace,
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: backupv1alpha1.BackupPolicySpec{
+						Schedule: "0 2 * * *",
+						Source: backupv1alpha1.SourceSpec{
+							Host:                 "postgres.default.svc",
+							Database:             "app",
+							CredentialsSecretRef: backupv1alpha1.SecretReference{Name: "pg-creds"},
+						},
+						Storage: backupv1alpha1.StorageSpec{
+							Endpoint:             "minio.default.svc:9000",
+							Bucket:               "backups",
+							CredentialsSecretRef: backupv1alpha1.SecretReference{Name: "minio-creds"},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

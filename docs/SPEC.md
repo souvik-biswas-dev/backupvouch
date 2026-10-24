@@ -20,7 +20,7 @@ Small teams running PostgreSQL on Kubernetes (including k3s and kind) who want e
 
 ## Non-goals (v1)
 
-- Backing up cluster objects or volumes (Velero covers that).
+- Backing up cluster objects or volumes (tools such as Velero cover that, verify).
 - Point-in-time recovery or WAL archiving.
 - Engines other than PostgreSQL (MongoDB and Redis are later work).
 - Restoring into production automatically.
@@ -32,20 +32,22 @@ Small teams running PostgreSQL on Kubernetes (including k3s and kind) who want e
 - One CRD, `BackupPolicy`, see `API.md`.
 - A controller that runs backup and verification as Kubernetes Jobs, see `ARCHITECTURE.md`.
 - One runner image with `backup` and `verify` subcommands.
-- Retention: keep the last N backups, never deleting the newest verified one.
+- Retention: keep the last N backups, never deleting the newest verified one, done by a prune Job.
+- Manual re-verification of the newest backup with an annotation.
 - Status conditions `BackupReady` and `RestoreVerified`, events, and four metrics.
-- A demo that backs up, verifies, sabotages the backup, and shows verification failing.
+- A demo that backs up, verifies, sabotages the stored backup, re-verifies it, and shows verification failing.
+- One Postgres major version (16) per runner image.
 
 ## User stories
 
 - As an operator of a small cluster, I declare a schedule and checks, and I can see at a glance whether last night's backup restored correctly.
 - As an on-call engineer, I get an alert when the newest backup is too old or its verification failed, with the failing check named.
 - As a team lead, I can tell auditors how long a real restore takes.
-- As a security reviewer, I can see that the operator never reads secrets and verification runs without network access to anything but storage.
+- As a security reviewer, I can see that the operator never reads secrets, and I can enforce with a NetworkPolicy that verification reaches nothing but storage.
 
 ## Success criteria
 
-- Corrupting a stored backup leads to `RestoreVerified=False` within one cycle, with the cause visible in status and events.
+- Corrupting a stored backup leads to `RestoreVerified=False` at the next verification (scheduled, or triggered with the re-verify annotation), with the cause visible in status and events.
 - A controller crash at any point creates no duplicate Jobs and leaves no scratch resources behind.
 - The whole demo runs on a laptop in under ten minutes without a cloud account.
 
