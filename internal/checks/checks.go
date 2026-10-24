@@ -27,6 +27,11 @@ import (
 	backupv1alpha1 "github.com/souvik-biswas-dev/backupvouch/api/v1alpha1"
 )
 
+const (
+	strTrue  = "true"
+	strFalse = "false"
+)
+
 // CheckResult represents the outcome of a single SQL check.
 type CheckResult struct {
 	Name    string `json:"name"`
@@ -68,25 +73,25 @@ func normalizeValue(val any) string {
 	switch v := val.(type) {
 	case bool:
 		if v {
-			return "true"
+			return strTrue
 		}
-		return "false"
+		return strFalse
 	case []byte:
 		s := strings.TrimSpace(string(v))
-		if s == "t" || s == "true" {
-			return "true"
+		if s == "t" || s == strTrue {
+			return strTrue
 		}
-		if s == "f" || s == "false" {
-			return "false"
+		if s == "f" || s == strFalse {
+			return strFalse
 		}
 		return s
 	case string:
 		s := strings.TrimSpace(v)
-		if s == "t" || s == "true" {
-			return "true"
+		if s == "t" || s == strTrue {
+			return strTrue
 		}
-		if s == "f" || s == "false" {
-			return "false"
+		if s == "f" || s == strFalse {
+			return strFalse
 		}
 		return s
 	case int64:
@@ -101,7 +106,7 @@ func normalizeValue(val any) string {
 }
 
 func isBooleanOrShortNumber(s string) bool {
-	if s == "true" || s == "false" {
+	if s == strTrue || s == strFalse {
 		return true
 	}
 	if len(s) > 20 {

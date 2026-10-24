@@ -107,7 +107,12 @@ func LoadVerifyConfig() (*VerifyConfig, error) {
 }
 
 // BuildVerifyResult constructs the VerifyResultMessage, truncating passed checks if the JSON exceeds 3500 bytes.
-func BuildVerifyResult(result backupv1alpha1.VerificationResultType, reason string, durationSeconds float64, checkResults []checks.CheckResult) VerifyResultMessage {
+func BuildVerifyResult(
+	result backupv1alpha1.VerificationResultType,
+	reason string,
+	durationSeconds float64,
+	checkResults []checks.CheckResult,
+) VerifyResultMessage {
 	msg := VerifyResultMessage{
 		Result:                 result,
 		Reason:                 reason,
@@ -270,7 +275,12 @@ func RunVerify(ctx context.Context) error {
 	var parsedChecks []backupv1alpha1.Check
 	if cfg.ChecksJSON != "" {
 		if err := json.Unmarshal([]byte(cfg.ChecksJSON), &parsedChecks); err != nil {
-			res := BuildVerifyResult(backupv1alpha1.VerificationFailed, backupv1alpha1.ReasonInvalidRunnerResult, restoreDuration, nil)
+			res := BuildVerifyResult(
+				backupv1alpha1.VerificationFailed,
+				backupv1alpha1.ReasonInvalidRunnerResult,
+				restoreDuration,
+				nil,
+			)
 			_ = writeTerminationLog(cfg.TerminationLog, res)
 			return fmt.Errorf("failed to parse checks JSON: %w", err)
 		}
@@ -289,13 +299,23 @@ func RunVerify(ctx context.Context) error {
 
 	checkResults, allPassed, err := checks.RunChecks(ctx, db, parsedChecks)
 	if err != nil {
-		res := BuildVerifyResult(backupv1alpha1.VerificationFailed, backupv1alpha1.ReasonCheckFailed, restoreDuration, checkResults)
+		res := BuildVerifyResult(
+			backupv1alpha1.VerificationFailed,
+			backupv1alpha1.ReasonCheckFailed,
+			restoreDuration,
+			checkResults,
+		)
 		_ = writeTerminationLog(cfg.TerminationLog, res)
 		return err
 	}
 
 	if !allPassed {
-		res := BuildVerifyResult(backupv1alpha1.VerificationFailed, backupv1alpha1.ReasonCheckFailed, restoreDuration, checkResults)
+		res := BuildVerifyResult(
+			backupv1alpha1.VerificationFailed,
+			backupv1alpha1.ReasonCheckFailed,
+			restoreDuration,
+			checkResults,
+		)
 		_ = writeTerminationLog(cfg.TerminationLog, res)
 		return errors.New("one or more checks failed")
 	}

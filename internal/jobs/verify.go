@@ -178,7 +178,7 @@ func BuildVerifyJob(policy *backupv1alpha1.BackupPolicy, runID int64, objectKey,
 		},
 		{
 			Name:  "TMPDIR",
-			Value: "/tmp",
+			Value: TmpMountPath,
 		},
 	}
 
@@ -264,7 +264,7 @@ func BuildVerifyJob(policy *backupv1alpha1.BackupPolicy, runID int64, objectKey,
 								},
 								{
 									Name:      TmpVolumeName,
-									MountPath: "/tmp",
+									MountPath: TmpMountPath,
 								},
 							},
 							Resources:                resources,

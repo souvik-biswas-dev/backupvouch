@@ -41,6 +41,9 @@ const (
 
 	// TmpVolumeName is the name of the emptyDir /tmp volume.
 	TmpVolumeName = "tmp"
+
+	// TmpMountPath is the directory path for the temporary scratch/tmp volume.
+	TmpMountPath = "/tmp"
 )
 
 // BackupJobName generates the deterministic Job name: <policy>-backup-<runID>.
@@ -201,7 +204,7 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 		},
 		{
 			Name:  "TMPDIR",
-			Value: "/tmp",
+			Value: TmpMountPath,
 		},
 	}
 
@@ -275,7 +278,7 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      TmpVolumeName,
-									MountPath: "/tmp",
+									MountPath: TmpMountPath,
 								},
 							},
 							Resources:                resources,
