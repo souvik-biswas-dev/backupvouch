@@ -63,36 +63,20 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-# TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
-# kubectl kuberc is disabled by default for test isolation; enable with:
-# - KUBECTL_KUBERC=true
-# CertManager is installed by default; skip with:
-# - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= backupvouch-test-e2e
+##@ Verification
 
-.PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+# The local verify command (also run by CI): generate, format, vet, unit and envtest tests.
+.PHONY: verify
+verify: manifests generate fmt vet test ## Run the full local verification (everything except lint and e2e).
 
-.PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
+# End-to-end test in a throwaway kind cluster, see docs/TESTING.md. Needs docker, kind and kubectl.
+# Variables: KIND_CLUSTER (cluster name), E2E_KEEP_CLUSTER=true (do not delete the cluster afterwards).
+KIND_CLUSTER ?= backupvouch-e2e
+RUNNER_IMG ?= $(shell sed -n 's/.*DefaultRunnerImage = "\(.*\)"/\1/p' internal/jobs/backup.go)
 
-.PHONY: cleanup-test-e2e
-cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
-	@$(KIND) delete cluster --name $(KIND_CLUSTER)
+.PHONY: e2e
+e2e: ## Run hack/e2e.sh: backup, verify, then sabotage and expect a failed verification.
+	KIND=$(KIND) E2E_CLUSTER=$(KIND_CLUSTER) bash hack/e2e.sh
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -124,6 +108,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build $(if $(BASE_IMAGE),--build-arg BASE_IMAGE=$(BASE_IMAGE)) -t ${IMG} .
+
+# The runner image must carry the tag the operator uses by default (internal/jobs DefaultRunnerImage),
+# so a kind cluster can run it without pulling from a registry.
+.PHONY: docker-build-runner
+docker-build-runner: ## Build the runner image (Dockerfile.runner).
+	$(CONTAINER_TOOL) build -f Dockerfile.runner -t $(RUNNER_IMG) .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.

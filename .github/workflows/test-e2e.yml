@@ -12,6 +12,7 @@ jobs:
       contents: read
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -23,16 +24,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install the latest version of kind
+      # VERIFY: the pinned kind version exists. The script creates the cluster itself.
+      - name: Install kind
+        env:
+          KIND_VERSION: v0.30.0
         run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-$(go env GOARCH)
+          curl -fsSLo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-$(go env GOARCH)"
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
+          kind version
 
-      - name: Verify kind installation
-        run: kind version
-
-      - name: Running Test e2e
-        run: |
-          go mod tidy
-          make test-e2e
+      # hack/e2e.sh: backup, verify, then sabotage and expect a failed verification (docs/TESTING.md).
+      - name: Run e2e
+        run: make e2e
