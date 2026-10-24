@@ -38,8 +38,10 @@ func main() {
 			os.Exit(1)
 		}
 	case "verify":
-		fmt.Fprintf(os.Stderr, "verify subcommand will be implemented in Step 4\n")
-		os.Exit(1)
+		if err := RunVerify(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "verify failed: %v\n", err)
+			os.Exit(1)
+		}
 	case "prune":
 		fmt.Fprintf(os.Stderr, "prune subcommand will be implemented in Step 4/5\n")
 		os.Exit(1)
