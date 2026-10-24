@@ -1,0 +1,9 @@
+apiVersion: backup.backupvouch.dev/v1alpha1
+kind: BackupPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: backupvouch
+    app.kubernetes.io/managed-by: kustomize
+  name: backuppolicy-sample
+spec:
+  # TODO(user): Add fields here
