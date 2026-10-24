@@ -81,6 +81,7 @@ RUNNER_IMG ?= $(shell sed -n 's/.*DefaultRunnerImage = "\(.*\)"/\1/p' internal/j
 .PHONY: e2e
 e2e: ## Run hack/e2e.sh: backup, verify, then sabotage and expect a failed verification.
 	KIND=$(KIND) E2E_CLUSTER=$(KIND_CLUSTER) bash hack/e2e.sh
+<<<<<<< HEAD
 
 # The narrated demo (hack/demo.sh): same steps as e2e, with commentary, status and events after each stage.
 # The kind cluster is kept afterwards (DEMO_KEEP_CLUSTER=false deletes it). Needs docker, kind and kubectl.
@@ -98,6 +99,8 @@ demo-clean: ## Delete the demo kind cluster.
 demo-transcript: ## Run the demo and save the real output to dist/demo-transcript.txt (for docs/TESTING.md).
 	mkdir -p dist
 	KIND=$(KIND) DEMO_CLUSTER=$(DEMO_CLUSTER) bash -o pipefail -c 'bash hack/demo.sh 2>&1 | tee dist/demo-transcript.txt'
+=======
+>>>>>>> origin/main
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

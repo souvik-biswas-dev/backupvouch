@@ -103,8 +103,13 @@ Short records of design choices. Add a new record when something changes.
 
 ## D17: End-to-end test is a shell script, the scaffold's Ginkgo e2e suite is removed
 
+<<<<<<< HEAD
 - **Context:** kubebuilder ships `test/e2e` (Ginkgo, cert-manager, a metrics curl Pod) that tests the empty scaffold. The sabotage story needs an S3 store, a seeded Postgres, a corrupted object and a re-verification, which is a sequence of `kubectl` steps more than a set of independent specs.
 - **Decision:** `hack/e2e.sh` (with fixtures in `config/samples/demo/`) is the end-to-end test, run by `make e2e` and by `test-e2e.yml`. `test/e2e`, `test/utils` and the Makefile targets `setup-test-e2e`, `test-e2e`, `cleanup-test-e2e` were deleted. cert-manager is not installed because v0.1 has no webhook (D8).
+=======
+- **Context:** kubebuilder ships `test/e2e` (Ginkgo, cert-manager, a metrics curl Pod) that tests the empty scaffold. The sabotage story needs MinIO, a seeded Postgres, a corrupted object and a re-verification, which is a sequence of `kubectl` steps more than a set of independent specs.
+- **Decision:** `hack/e2e.sh` (with fixtures in `hack/e2e/`) is the end-to-end test, run by `make e2e` and by `test-e2e.yml`. `test/e2e`, `test/utils` and the Makefile targets `setup-test-e2e`, `test-e2e`, `cleanup-test-e2e` were deleted. cert-manager is not installed because v0.1 has no webhook (D8).
+>>>>>>> origin/main
 - **Consequences:** the demo script (step 7) can reuse the same fixtures and steps. The e2e checks are plain bash, so they are less structured than Ginkgo specs. If a Go e2e suite is wanted later, add it next to the script.
 
 ## D18: Events use the `events.k8s.io` API, and failed Jobs are deleted with background propagation
@@ -112,6 +117,7 @@ Short records of design choices. Add a new record when something changes.
 - **Context:** the reconciler records events with `mgr.GetEventRecorder`, which writes through the `events.k8s.io` API, while the RBAC marker (step 5) granted the core `events` resource. Envtest runs as an administrator, so the mismatch would only show on a real cluster, as events that never appear. Separately, `batch/v1` Jobs default to orphaning their Pods when deleted, so failing a run early (`SecretMissing`) left the stuck Pod behind.
 - **Decision:** the marker is `groups=events.k8s.io,resources=events,verbs=create;patch;update`. The unused `create` and `delete` verbs on `backuppolicies` were removed to match SECURITY.md. `failBackup` and `failVerify` delete the Job with `DeletePropagationBackground`, as the finalizer and the cleanup already did.
 - **Consequences:** `hack/e2e.sh` asserts the `VerificationPassed` and `VerificationFailed` events, which is the check that settles the events RBAC question (VERIFY). `config/rbac/role.yaml` was edited by hand to match what `make manifests` should produce; run `make manifests` and commit any difference.
+<<<<<<< HEAD
 
 ## D19: One set of steps and one set of fixtures for the e2e test and the demo
 
@@ -126,3 +132,5 @@ Short records of design choices. Add a new record when something changes.
 - **Decision:** the fixture S3 store is SeaweedFS (`chrislusf/seaweedfs`, `weed mini`, pinned to 4.42) in `config/samples/demo/s3.yaml`, with Service `s3` on port 8333 and Secret `s3-creds`. The runner is unchanged: it uses the `minio-go` client library, which speaks plain S3 and is independent of the MinIO server. The `mc` pod is replaced by `s3_call` in `hack/lib.sh`: a one-off `curlimages/curl` Pod that sends a SigV4-signed request (`--aws-sigv4`), read back with `kubectl wait`-style polling and `kubectl logs` instead of an attached, piped stdin. The same helper first proves that signed requests and the bucket work, so a broken store fails early with a clear message.
 - **Consequences:** no dependency on MinIO images anywhere. The server is a test fixture only; users keep any S3-compatible store. The tags `chrislusf/seaweedfs:4.42` and `curlimages/curl:8.12.1` are VERIFY items until the first green CI run, and can be bumped in one place each (`s3.yaml`, `CURL_IMG` in `hack/lib.sh`).
 
+=======
+>>>>>>> origin/main
