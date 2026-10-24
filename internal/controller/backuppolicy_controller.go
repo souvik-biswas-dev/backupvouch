@@ -53,13 +53,13 @@ type BackupPolicyReconciler struct {
 	NowFunc                    func() time.Time
 }
 
-// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=get;list;watch
-// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=create;update;patch;delete
+// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// VERIFY: the recorder comes from mgr.GetEventRecorder (events.k8s.io API), so the rule is for events.k8s.io, not core events.
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch;update
 
 // Reconcile executes the state machine per docs/ARCHITECTURE.md.
 func (r *BackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -507,7 +507,8 @@ func (r *BackupPolicyReconciler) failBackup(
 	jobToDelete *batchv1.Job,
 ) (ctrl.Result, error) {
 	if jobToDelete != nil {
-		_ = r.Delete(ctx, jobToDelete)
+		// Background propagation: batch/v1 Jobs default to orphaning their Pods, which would leave a stuck Pod behind.
+		_ = r.Delete(ctx, jobToDelete, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	}
 
 	nowMeta := metav1.NewTime(r.now())
@@ -535,7 +536,8 @@ func (r *BackupPolicyReconciler) failVerify(
 	jobToDelete *batchv1.Job,
 ) (ctrl.Result, error) {
 	if jobToDelete != nil {
-		_ = r.Delete(ctx, jobToDelete)
+		// Background propagation: batch/v1 Jobs default to orphaning their Pods, which would leave a stuck Pod behind.
+		_ = r.Delete(ctx, jobToDelete, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	}
 
 	nowMeta := metav1.NewTime(r.now())

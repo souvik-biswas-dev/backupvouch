@@ -109,6 +109,8 @@ The runner runs each check inside a read-only transaction with a statement timeo
 | `BackupReady` | the last backup succeeded | `SourceUnreachable`, `StorageUnreachable`, `SecretMissing`, `BackupJobFailed`, `BackupTimeout`, `InvalidRunnerResult` |
 | `RestoreVerified` | the last backup was restored and every check passed | `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable`, `SecretMissing`, `VerificationTimeout`, `InvalidRunnerResult` |
 
+When a condition is True the reason is `SpecValid`, `BackupSucceeded` or `VerificationPassed`; before the first run the reason is `NoRunYet`.
+
 `BackupReady` and `RestoreVerified` are `Unknown` until the first backup or verification finishes. When `verify.enabled` is false, `RestoreVerified` stays `Unknown` with reason `VerificationDisabled`. While `SpecValid` is False, no new run starts.
 
 ## Manual re-verification

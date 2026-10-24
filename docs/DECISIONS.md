@@ -100,3 +100,15 @@ Short records of design choices. Add a new record when something changes.
 - **Decision:** (1) `verify.enabled` is a `*bool`, because with `omitempty` a plain `bool` set to false is dropped and the server default `true` would silently win. `scratchSize` is a `*resource.Quantity` for the same reason (a zero Quantity serialises as `"0"`). (2) `status.lastVerification.restoreDurationSeconds` is an `int64` of whole seconds, because controller-gen refuses floating-point fields unless `allowDangerousTypes` is set; the runner still reports a fractional value in its termination message and the controller rounds it. (3) `runID`, `currentRunID`, `lastRunID` and `lastReverifyID` are `int64` Unix timestamps. Optional structs (`retention`, `verify`) use `omitzero` and `default={}` so their inner defaults apply when they are omitted.
 - **Consequences:** `BackupPolicySpec.SetDefaults()` mirrors the schema defaults in Go, so the controller does not depend on server-side defaulting. Restore time resolution is one second.
 
+
+## D17: End-to-end test is a shell script, the scaffold's Ginkgo e2e suite is removed
+
+- **Context:** kubebuilder ships `test/e2e` (Ginkgo, cert-manager, a metrics curl Pod) that tests the empty scaffold. The sabotage story needs MinIO, a seeded Postgres, a corrupted object and a re-verification, which is a sequence of `kubectl` steps more than a set of independent specs.
+- **Decision:** `hack/e2e.sh` (with fixtures in `hack/e2e/`) is the end-to-end test, run by `make e2e` and by `test-e2e.yml`. `test/e2e`, `test/utils` and the Makefile targets `setup-test-e2e`, `test-e2e`, `cleanup-test-e2e` were deleted. cert-manager is not installed because v0.1 has no webhook (D8).
+- **Consequences:** the demo script (step 7) can reuse the same fixtures and steps. The e2e checks are plain bash, so they are less structured than Ginkgo specs. If a Go e2e suite is wanted later, add it next to the script.
+
+## D18: Events use the `events.k8s.io` API, and failed Jobs are deleted with background propagation
+
+- **Context:** the reconciler records events with `mgr.GetEventRecorder`, which writes through the `events.k8s.io` API, while the RBAC marker (step 5) granted the core `events` resource. Envtest runs as an administrator, so the mismatch would only show on a real cluster, as events that never appear. Separately, `batch/v1` Jobs default to orphaning their Pods when deleted, so failing a run early (`SecretMissing`) left the stuck Pod behind.
+- **Decision:** the marker is `groups=events.k8s.io,resources=events,verbs=create;patch;update`. The unused `create` and `delete` verbs on `backuppolicies` were removed to match SECURITY.md. `failBackup` and `failVerify` delete the Job with `DeletePropagationBackground`, as the finalizer and the cleanup already did.
+- **Consequences:** `hack/e2e.sh` asserts the `VerificationPassed` and `VerificationFailed` events, which is the check that settles the events RBAC question (VERIFY). `config/rbac/role.yaml` was edited by hand to match what `make manifests` should produce; run `make manifests` and commit any difference.

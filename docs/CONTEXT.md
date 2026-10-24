@@ -1,93 +1,98 @@
 # CONTEXT (handoff)
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25 (step 6 written, not yet run)
 Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs PostgreSQL backups and verifies them by restoring into a scratch Postgres.
+Repo: github.com/souvik-biswas-dev/backupvouch, `main` was at commit `bd5d81a` when step 6 started. Step 6 is in the zip `backupvouch-step6.zip`, not yet committed.
 
 ## Status of the plan
 
 | Step | What | Status |
 |---|---|---|
-| 0 | scaffold with kubebuilder (done by the author locally) | done; `make manifests generate fmt vet test` passed locally, scaffold test coverage 66.7% |
-| 1 | documentation foundation | done (consistency review, docs only, see below) |
-| 1b | brand: vector logo, favicon, social preview, docs/BRAND.md | done (files rendered and inspected in the sandbox) |
-| 2 | API types | done; manifests and code generated, tests passing |
-| 3 | scheduling and backup Job | done; internal/schedule, internal/jobs, cmd/runner, Dockerfile.runner, tests passing |
-| 4 | restore verification | done; cmd/runner verify, internal/checks, internal/jobs verify builder, tests passing |
-| 5 | controller | done; reconcile loop, state machine, prune runner & builder, metrics, validation, envtest passing |
-| 6 | tests and CI | not started |
-| 7 | packaging and demo | not started |
+| 0 | scaffold with kubebuilder | done |
+| 1 | documentation review | done |
+| 1b | brand: logo, favicon, social preview, docs/BRAND.md | done |
+| 2 | API types | done |
+| 3 | scheduling and backup Job (`internal/schedule`, `internal/jobs`, `cmd/runner backup`, `Dockerfile.runner`) | done |
+| 4 | restore verification (`cmd/runner verify`, `internal/checks`, verify Job builder) | done |
+| 5 | controller (state machine, prune runner and builder, metrics, validation, envtest happy path) | done |
+| 6 | tests and CI | written, **not run**: failure-path envtest specs, `hack/e2e.sh`, Makefile `verify`/`e2e`/`docker-build-runner`, CI workflows, TESTING.md. Needs `make verify` and `make e2e` on your machine |
+| 7 | packaging and demo | not started (see "Left for step 7") |
 | 8 | optional dashboard | not started |
 | 9 | final docs and polish | not started |
 
-## Decisions so far
+## Last verified state (steps 0 to 5, by the author, before step 6)
 
-See `DECISIONS.md` (D1 to D16). The project was renamed from the working name `restoreguard` to BackupVouch. Names, fields, states, metrics and reasons are defined in `API.md` and `ARCHITECTURE.md`. Step 1 added D10 to D15 and amended D3, D4, D6, D7, D8, D9.
+`make manifests generate fmt vet test` passed, all packages ok. Coverage: api/v1alpha1 36.2%, cmd/runner 30.7%, internal/checks 48.2%, internal/controller 57.9%, internal/jobs 90.1%, internal/metrics 95.5%, internal/schedule 89.6%, internal/validation 82.6%. `make lint` has not been confirmed. Nothing in step 6 has been compiled or run (the chat sandbox has Go 1.24 and no module access, the module needs Go 1.26).
 
-## Step 1 review: what changed and why
+## What exists (checked against the code in the step 5 zip)
 
-Design gaps found and fixed in the documents (no code exists yet, so all are cheap now):
+- `api/v1alpha1`: `BackupPolicy` types with markers, constants (conditions, reasons, labels, finalizer, re-verify annotation), `SetDefaults`, check validation helpers, tests.
+- `internal/schedule`: cron parsing with time zone, `IsDue`, `NextRun`, `LastScheduledTime`.
+- `internal/jobs`: `BuildBackupJob`, `BuildVerifyJob`, `BuildPruneJob` with hardening (UID 70, read-only root, no token, drop ALL, seccomp), deterministic names, owner references.
+- `internal/checks`: check evaluation and `RunCheck` (read-only transaction, statement timeout, message sanitising). `RunCheck` needs a database and is not unit-tested.
+- `internal/validation`: cron, time zone, runner image allow-list (`SpecValid`).
+- `internal/metrics`: the four gauges, `UpdatePolicyMetrics`, `DeletePolicyMetrics`.
+- `internal/controller`: reconciler (finalizer, `SpecValid`, phases Idle/BackingUp/Verifying/Pruning, re-verify annotation, history of 10, cleanup of old Jobs, early `SecretMissing`), `pod_reader.go` (termination message parsing, Pod inspection).
+- `cmd/main.go` (manager, `--allowed-runner-images`), `cmd/runner` (`backup`, `verify`, `prune`), `Dockerfile`, `Dockerfile.runner` (postgres 16.8, UID 70).
+- `config/`: CRD, RBAC, manager, default kustomization (metrics over HTTPS), samples (full CR and an example Secrets file), scaffold network-policy and prometheus overlays (not enabled).
+- `assets/brand/`, all docs in `docs/`, `SECURITY.md`, `README.md` (still says "design phase"), workflows `lint.yml`, `test.yml`, `test-e2e.yml`.
 
-1. Retention needs to delete objects, but the controller "never touches storage". Added a prune Job and `runner prune` (D12).
-2. The sabotage demo could not work: the next scheduled run takes a fresh good backup. Added the `backupvouch.dev/reverify` annotation and `status.lastReverifyID` (D13).
-3. Failure reasons (`SourceUnreachable` and so on) had no transport. Defined failure termination messages, timeouts read from the Job condition, and the 4 KB budget (D4, D11).
-4. A missing Secret leaves a Pod waiting forever instead of failing. Added early `SecretMissing` detection from Pod state (D6).
-5. Run model was underspecified: overlap, missed schedules, crash between Job create and status write. Added D10, `status.lastRunID`, and `runID` from the scheduled time.
-6. `runnerImage` plus `secretKeyRef` let a BackupPolicy author mount any Secret into any image. Added an image allow-list and the `SpecValid` condition (D14).
-7. Postgres version and non-root `initdb` issues: fixed UID, emptyDir with size limit (`verify.scratchSize`), one Postgres major version per runner image, `--no-owner --no-privileges` (D3, D15).
-8. Smaller fixes: `t`/`f` versus `true` in check comparison, 45-character name limit (Job names), list-map uniqueness for check names instead of controller validation, `VerificationDisabled` state, `Pruning` phase, `backuppolicies/finalizers` and metrics-auth RBAC, `StorageUnreachable` and `InvalidRunnerResult` reasons added where the failure table used them, label key `backupvouch.dev/policy` (the runbook used a different one), check messages must not leak row data, scaffold CI workflows reused instead of a new `ci.yml`.
-9. Claims about Velero, CloudNativePG, K8up, FireDrill and the `restoreguard` name are marked "(verify)" and nothing claims BackupVouch is first. README still claims nothing works.
+Added in step 6: `internal/controller/backuppolicy_failures_test.go`, `hack/e2e.sh`, `hack/e2e/{minio,postgres,policy}.yaml`, Makefile targets `verify`, `e2e`, `docker-build-runner`, updated workflows, rewritten `docs/TESTING.md`, D17 and D18. Removed: scaffold `test/e2e` and `test/utils` and their Makefile targets (D17).
 
-## Known issues
+## Where the code differs from the docs
 
-- Nothing in this repo beyond the kubebuilder scaffold has been compiled or run. Claude chats have no Go toolchain, so every step must be verified locally with `make manifests generate fmt vet test`.
-- `make lint` was not part of the step 0 verification (the first attempt failed because the repo path contained a space). Run it once from `~/oss/backupvouch`.
-- Comparisons with Velero, CloudNativePG, K8up and FireDrill in `SPEC.md` are from memory and must be checked against current docs before the README makes any claim.
-- Open items marked VERIFY: Events RBAC group (`events` or `events.k8s.io`), Job status validation in envtest.
-- The runner image build for other Postgres majors is undecided (step 3).
+Fixed in step 6:
 
-## Step 1b and step 2 (done in one chat, one zip: backupvouch-step2.zip)
+1. Events RBAC was on the core `events` resource but the recorder (`mgr.GetEventRecorder`) uses `events.k8s.io`. Marker, `config/rbac/role.yaml` and SECURITY.md now say `events.k8s.io` (D18). VERIFY in the e2e run.
+2. The controller asked for `create` and `delete` on `backuppolicies`, which SECURITY.md did not justify and the code never uses. Removed.
+3. `failBackup` and `failVerify` deleted the Job without background propagation, which orphans the Pod for `batch/v1` Jobs. Fixed (D18).
+4. `Dockerfile.runner` built with `golang:1.24-alpine` while `go.mod` needs Go 1.26. Now `golang:1.26-alpine`.
+5. SECURITY.md said "RBAC (planned)", TESTING.md said "nothing has been run". Updated.
 
-Brand: `assets/brand/` holds the mark, light and dark lockups, mono logo, favicon (svg, ico, 32 px png), apple touch icon and the social preview, all generated by `assets/brand/build.py` (IBM Plex Sans outlined, palette in `docs/BRAND.md`). README shows the logo with a `<picture>` element. The rasters were checked at 16, 32, 64 and 256 px on light and dark backgrounds.
+Still open (code behaves differently from `docs/ARCHITECTURE.md` or `docs/API.md`, not changed because they are behaviour changes; each needs a small fix and a test):
 
-API: `api/v1alpha1/backuppolicy_types.go` implements `docs/API.md` (markers for validation, defaults, status subresource, printer columns, short name `bp`, CEL name-length rule, list-map checks). `api/v1alpha1/constants.go` holds condition types, reasons, label keys, the finalizer and the reverify annotation. `api/v1alpha1/helpers.go` has `SetDefaults`, `VerifySpec.IsEnabled`, `ValidateChecks`, `ValidateCheckSQL`, `ValidateTimeZone`, with table-driven tests in `helpers_test.go`. The scaffold's controller test now creates a valid spec. The sample CR is the full example from `docs/API.md`; `config/samples/backup_v1alpha1_secrets.example.yaml` shows the Secrets it needs (not in the kustomization). D16 records the Go-specific type decisions. No controller logic was written.
+| # | Doc says | Code does | Impact |
+|---|---|---|---|
+| a | Metrics are recomputed from status on every reconcile (rule 6) | `UpdatePolicyMetrics` is called only when a backup or verification finishes | After an operator restart the gauges are missing until the next run; alerts on `backupvouch_last_verified_timestamp_seconds` can misfire. Fix: call it at the start of `Reconcile` |
+| b | The controller resumes at the correct stage after a crash (rule 4, 6) | `reconcileVerifying` only requeues when its Job is missing, while `BackingUp` and `Pruning` recreate it | A deleted verify Job leaves the policy in `Verifying` forever. Fix: recreate it from `status.lastBackup` |
+| c | The controller trusts only reasons from a fixed list (D11) | `isValidBackupFailureReason` guards backup, but a verify result's `reason` is copied as is | Unknown reasons become condition reasons. Fix: whitelist `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable` |
+| d | `lastVerification.message` is a short reason, check messages are carried | Verify failures store the fixed text "one or more checks or restore operations failed"; per-check messages and the runner's message are dropped | Less help when a check fails. Fix: use the failed check messages |
+| e | The newest terminated Pod of a Job is read (rule 5) | `InspectJobPods` keeps the last terminated message in list order | With `backoffLimit: 1` a retry creates a second Pod; list order is not guaranteed. Fix: sort by creation time |
+| f | The Jobs of the last 3 runs are kept (rule 8) | Cleanup runs only at the end of `Pruning`, not after failed runs | Jobs of failed runs pile up until a run succeeds |
+| g | `suspend` pauses scheduling | A suspended Idle policy returns before `reconcileIdle`, so it also ignores the re-verify annotation and never initialises conditions | Minor, decide whether that is intended and document it |
+| h | Prune result `{deleted, kept}` (ARCHITECTURE) | The prune message is not read, events carry no counts | Minor |
+| i | `docs/API.md` conditions table lists only the False reasons | Code also sets True reasons `SpecValid`, `BackupSucceeded`, `VerificationPassed` and Unknown `NoRunYet` | Doc gap, see API.md note |
 
-Not done in step 2 (by design): cron validation (needs robfig/cron, step 3), the runner image allow-list function (step 5).
+## Known issues and VERIFY items
 
-## Known issues
+- Step 6 code is unverified. Expect small fixes. The least certain parts: `markJobFailed` accepted by the envtest API server (strict Job status validation), `kubectl run -i` with piped stdin in `hack/e2e.sh`, the image tags `minio/minio:RELEASE.2025-04-22T22-12-26Z` and `minio/mc:RELEASE.2025-04-16T18-13-26Z`, `/bin/sh` in the MinIO image, kind `v0.30.0` in CI, events visible through `kubectl get events` after the RBAC change.
+- `config/rbac/role.yaml` was edited by hand. Run `make manifests`; if it differs, commit the generated file (CI fails on a diff otherwise).
+- `make lint` was never confirmed. Run it once.
+- `go mod tidy` was removed from CI (it hid an untidy go.mod). Run it locally before pushing.
+- Coverage gaps: `cmd/runner` 30.7% (the paths that need Postgres or S3 are covered only by e2e), `internal/checks` 48.2% (`RunCheck` needs a database), `api/v1alpha1` 36.2% (mostly generated deepcopy), `cmd/main.go` has no tests.
+- The scaffold's `config/manager/manager.yaml` has no `--allowed-runner-images`; only the default runner image is allowed (D14). A kind demo works because the runner is loaded under the default tag.
+- Comparisons with Velero, CloudNativePG, K8up and FireDrill in `SPEC.md` are from memory; check them before the README claims anything. Name availability on GitHub, pkg.go.dev and Artifact Hub is unchecked (D9).
+- Favicon should be looked at once in a real browser tab.
+- README still says "design phase" (step 9).
 
-- `goconst` flagged repeated strings in table-driven tests (`helpers_test.go`); resolved by setting `ignore-tests: true` in `.golangci.yml` and using `DefaultTimeZone`.
-- Comparisons with Velero, CloudNativePG, K8up and FireDrill in `SPEC.md` are from memory and must be checked against current docs before the README makes any claim.
-- Open items marked VERIFY: Events RBAC group (`events` or `events.k8s.io`), Job status validation in envtest.
-- Favicon rendering should be looked at once in a real browser tab.
+## Decisions
 
-## Step 3 review: what changed and why
+See `DECISIONS.md`, D1 to D18. D17: e2e is a bash script, the scaffold Ginkgo e2e is removed. D18: events RBAC group and Job deletion propagation.
 
-1. `internal/schedule`: pure 5-field cron parsing with timezone support and missed run catch-up (`LastScheduledTime`, `IsDue`, `NextRun`). 100% table-driven unit tests pass.
-2. `internal/jobs`: `BuildBackupJob` constructing fully hardened `batch/v1` Job (UID 70, non-root, read-only root, drop capabilities, owner references, S3 and PG secretKeyRef env vars, 63-char name limit).
-3. `cmd/runner`: `backup` subcommand streaming `pg_dump -Fc` to MinIO S3 storage, hashing and byte counting on the fly, zero secrets in logs/messages, structured termination message.
-4. `Dockerfile.runner`: multi-stage build on pinned `postgres:16.8-alpine3.21` with UID 70.
+## Left for step 7 (so it does not redo step 6)
 
-## Step 4 review: what changed and why
-
-1. `internal/checks`: SQL check evaluation logic, single-row/single-column validation, boolean/numeric normalization, data leak prevention in error messages (never exposing sensitive row data). 100% unit tested.
-2. `internal/jobs`: `BuildVerifyJob` constructing hardened `batch/v1` Job with `emptyDir` scratch volume sized by `verify.scratchSize`, storage credentials only (no DB secrets), UID 70, owner references.
-3. `cmd/runner`: `verify` subcommand downloading S3 dump, checking SHA-256 (`ChecksumMismatch`), running scratch Postgres on Unix socket, executing `pg_restore` (`RestoreFailed`), running checks (`CheckFailed`), measuring duration, clean shutdown/cleanup in defer, structured JSON termination message.
-4. `SECURITY.md`: added recommended `NetworkPolicy` manifest for verification Jobs restricting egress strictly to DNS and S3 storage endpoints.
-
-## Step 5 review: what changed and why
-
-1. `cmd/runner`: `prune` subcommand listing S3 objects, sorting newest first, keeping `keepLast` objects, protecting the newest verified backup (`PROTECTED_KEY`), and recording results in `/dev/termination-log`.
-2. `internal/jobs`: `BuildPruneJob` constructing hardened `batch/v1` Job (UID 70, `/tmp` emptyDir, storage secrets only, owner references).
-3. `internal/metrics`: Prometheus gauges registered with controller-runtime (`backupvouch_last_backup_timestamp_seconds`, `backupvouch_last_verified_timestamp_seconds`, `backupvouch_verification_success`, `backupvouch_restore_duration_seconds`) with label updates and deletion cleanup.
-4. `internal/validation`: cron schedule, IANA timezone, and runner image allow-list validation (`SpecValid` condition).
-5. `internal/controller`: full reconciliation state machine (`Idle` -> `BackingUp` -> `Verifying` -> `Pruning` -> `Idle`), SecretMissing early detection from Pod waiting reason, manual re-verification via `backupvouch.dev/reverify` annotation, finalizer cleanup of owned Jobs, and history ring buffer (last 10 runs).
-6. Tests: envtest integration suite covering the entire state machine, validation, and finalizers.
+Already present from step 6: `make docker-build-runner`, `make deploy`/`make e2e`, `hack/e2e/` fixtures (MinIO, Postgres with seed data, policy). Step 7 still has to do: an install kustomization and `make build-installer` check, `config/samples/demo/` (can reuse `hack/e2e/*.yaml`), `hack/demo.sh` with the narrated story, the optional ghcr.io publishing workflow, and the demo transcript in TESTING.md. Consider fixing open items a, b and c first, since the demo will show restarts and failures.
 
 ## Next
 
-Step 6 (tests and CI: kind e2e script, SABOTAGE test, GitHub Actions workflows).
+1. Run the verify commands below, paste failures back (Fix prompt).
+2. Commit step 6 (`git commit -s`, add `Assisted-by:` trailer per AGENTS.md).
+3. Step 7, or first the small fixes a to e above.
 
 ## To verify locally
 
-    make manifests generate fmt vet test
-
+    make manifests generate fmt vet test     # same as: make verify
+    git diff config/rbac/role.yaml           # should show no change after make manifests, else commit it
+    make lint
+    make e2e                                 # needs docker, kind, kubectl; paste the output if it fails
+    # to keep the cluster for debugging:  E2E_KEEP_CLUSTER=true make e2e
