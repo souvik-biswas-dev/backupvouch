@@ -12,7 +12,7 @@ Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs Pos
 | 1b | brand: vector logo, favicon, social preview, docs/BRAND.md | done (files rendered and inspected in the sandbox) |
 | 2 | API types | done; manifests and code generated, tests passing |
 | 3 | scheduling and backup Job | done; internal/schedule, internal/jobs, cmd/runner, Dockerfile.runner, tests passing |
-| 4 | restore verification | not started |
+| 4 | restore verification | done; cmd/runner verify, internal/checks, internal/jobs verify builder, tests passing |
 | 5 | controller | not started |
 | 6 | tests and CI | not started |
 | 7 | packaging and demo | not started |
@@ -67,9 +67,16 @@ Not done in step 2 (by design): cron validation (needs robfig/cron, step 3), the
 3. `cmd/runner`: `backup` subcommand streaming `pg_dump -Fc` to MinIO S3 storage, hashing and byte counting on the fly, zero secrets in logs/messages, structured termination message.
 4. `Dockerfile.runner`: multi-stage build on pinned `postgres:16.8-alpine3.21` with UID 70.
 
+## Step 4 review: what changed and why
+
+1. `internal/checks`: SQL check evaluation logic, single-row/single-column validation, boolean/numeric normalization, data leak prevention in error messages (never exposing sensitive row data). 100% unit tested.
+2. `internal/jobs`: `BuildVerifyJob` constructing hardened `batch/v1` Job with `emptyDir` scratch volume sized by `verify.scratchSize`, storage credentials only (no DB secrets), UID 70, owner references.
+3. `cmd/runner`: `verify` subcommand downloading S3 dump, checking SHA-256 (`ChecksumMismatch`), running scratch Postgres on Unix socket, executing `pg_restore` (`RestoreFailed`), running checks (`CheckFailed`), measuring duration, clean shutdown/cleanup in defer, structured JSON termination message.
+4. `SECURITY.md`: added recommended `NetworkPolicy` manifest for verification Jobs restricting egress strictly to DNS and S3 storage endpoints.
+
 ## Next
 
-Step 4 (restore verification: cmd/runner verify, checks evaluation, throwaway Postgres in emptyDir, verify Job builder).
+Step 5 (the controller: reconcile loop, state machine, idempotency, failure handling, finalizer, Prometheus metrics, RBAC).
 
 ## To verify locally
 

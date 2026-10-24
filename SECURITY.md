@@ -46,3 +46,41 @@ The scaffold also generates `backuppolicy_admin_role`, `backuppolicy_editor_role
 - Apply the egress NetworkPolicy from `docs/ARCHITECTURE.md`. It is a recommendation, BackupVouch does not create it, so nothing enforces it unless you do.
 - Set the allow-list of runner images on the operator and keep it narrow.
 - Pin the runner image by tag or digest.
+
+### Recommended NetworkPolicy for Verification Jobs
+
+Verification Jobs (`backupvouch.dev/role: verify`) only need egress to Kubernetes DNS and the S3 storage endpoint; they never connect to the source database:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backupvouch-verify-egress
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      backupvouch.dev/role: verify
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow egress to S3 storage endpoint (e.g. MinIO)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+```
