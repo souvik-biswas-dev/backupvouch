@@ -104,7 +104,7 @@ var _ = Describe("BackupPolicy Controller", func() {
 			Expect(k8sClient.Get(ctx, typeNamespacedName, fetched)).To(Succeed())
 
 			cond := fetched.Status.Conditions
-			Expect(len(cond)).To(BeNumerically(">", 0))
+			Expect(cond).ToNot(BeEmpty())
 			specValidCond := cond[0]
 			Expect(specValidCond.Type).To(Equal(backupv1alpha1.ConditionSpecValid))
 			Expect(specValidCond.Status).To(Equal(metav1.ConditionFalse))
@@ -264,7 +264,7 @@ var _ = Describe("BackupPolicy Controller", func() {
 			Expect(k8sClient.Get(ctx, typeNamespacedName, fetched)).To(Succeed())
 			Expect(fetched.Status.Phase).To(Equal(backupv1alpha1.PhaseIdle))
 			Expect(fetched.Status.CurrentRunID).To(Equal(int64(0)))
-			Expect(len(fetched.Status.History)).To(Equal(1))
+			Expect(fetched.Status.History).To(HaveLen(1))
 			Expect(fetched.Status.History[0].BackupResult).To(Equal(backupv1alpha1.BackupSucceeded))
 			Expect(fetched.Status.History[0].VerificationResult).To(Equal(backupv1alpha1.VerificationPassed))
 
