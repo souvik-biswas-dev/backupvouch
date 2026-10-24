@@ -25,6 +25,8 @@ linters:
     - unused
     - logcheck
   settings:
+    goconst:
+      ignore-tests: true
     custom:
       logcheck:
         type: "module"

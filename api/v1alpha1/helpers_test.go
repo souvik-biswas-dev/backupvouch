@@ -27,7 +27,7 @@ func TestSetDefaults(t *testing.T) {
 	t.Run("empty spec gets every default", func(t *testing.T) {
 		s := BackupPolicySpec{Verify: VerifySpec{Checks: []Check{{Name: "a", SQL: "SELECT true"}}}}
 		s.SetDefaults()
-		if s.TimeZone != "UTC" || s.Source.Engine != EnginePostgres || s.Source.Port != 5432 {
+		if s.TimeZone != DefaultTimeZone || s.Source.Engine != EnginePostgres || s.Source.Port != 5432 {
 			t.Errorf("source or time zone defaults missing: %+v", s)
 		}
 		if s.Retention.KeepLast != 7 || s.BackupTimeoutSeconds != 1800 || s.Verify.TimeoutSeconds != 900 {

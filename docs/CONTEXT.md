@@ -10,7 +10,7 @@ Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs Pos
 | 0 | scaffold with kubebuilder (done by the author locally) | done; `make manifests generate fmt vet test` passed locally, scaffold test coverage 66.7% |
 | 1 | documentation foundation | done (consistency review, docs only, see below) |
 | 1b | brand: vector logo, favicon, social preview, docs/BRAND.md | done (files rendered and inspected in the sandbox) |
-| 2 | API types | written, NOT compiled; needs `make manifests generate` locally |
+| 2 | API types | done; manifests and code generated, tests passing |
 | 3 | scheduling and backup Job | not started |
 | 4 | restore verification | not started |
 | 5 | controller | not started |
@@ -55,10 +55,7 @@ Not done in step 2 (by design): cron validation (needs robfig/cron, step 3), the
 
 ## Known issues
 
-- Nothing in this repo beyond the kubebuilder scaffold has been compiled or run. Claude chats have no Go toolchain.
-- I deleted the stale `api/v1alpha1/zz_generated.deepcopy.go` (it described the old scaffold type). `make generate` recreates it. `config/crd/bases/*.yaml` and `config/rbac/role.yaml` are also stale until `make manifests` runs. Until then `go build` and `go vet` fail with missing `DeepCopyObject`; that is expected.
-- `gofmt` was not available, so formatting was done by hand. `make fmt` may change whitespace.
-- `make lint` has not been run once yet (step 0 did not run it).
+- `goconst` flagged repeated strings in table-driven tests (`helpers_test.go`); resolved by setting `ignore-tests: true` in `.golangci.yml` and using `DefaultTimeZone`.
 - Comparisons with Velero, CloudNativePG, K8up and FireDrill in `SPEC.md` are from memory and must be checked against current docs before the README makes any claim.
 - Open items marked VERIFY: Events RBAC group (`events` or `events.k8s.io`), Job status validation in envtest.
 - The runner image build for other Postgres majors is undecided (step 3).
