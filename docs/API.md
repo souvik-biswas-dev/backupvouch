@@ -34,6 +34,7 @@ spec:
   verify:
     enabled: true
     timeoutSeconds: 900
+    scratchSize: 5Gi
     checks:
       - name: users-not-empty
         sql: "SELECT count(*) > 0 FROM users"
@@ -64,39 +65,59 @@ spec:
 | `backupTimeoutSeconds` | int | `1800` | Job `activeDeadlineSeconds` for backup |
 | `verify.enabled` | bool | `true` | if false, a run ends at `BackedUp` |
 | `verify.timeoutSeconds` | int | `900` | Job deadline for verification |
-| `verify.checks[].name` | string | required | unique within the policy, DNS-label style |
-| `verify.checks[].sql` | string | required | must return exactly one row and one column |
-| `verify.checks[].expect` | string | `"true"` | expected text of the single value |
-| `runnerImage` | string | operator default | pinned tag recommended |
+| `verify.scratchSize` | quantity | `5Gi` | size limit of the `emptyDir` that holds the downloaded dump and the scratch Postgres data; must exceed the dump plus the restored database |
+| `verify.checks` | list | empty | at most 20 entries, a map keyed by `name` (the API server enforces unique names) |
+| `verify.checks[].name` | string | required | DNS-label style |
+| `verify.checks[].sql` | string | required | one statement that returns exactly one row and one column, at most 2000 characters |
+| `verify.checks[].expect` | string | `"true"` | expected text of the single value, compared after normalisation (see below) |
+| `runnerImage` | string | operator default | must match the operator's allow-list of runner images (default: only the operator's own default image), see D14 |
 | `resources` | ResourceRequirements | modest defaults | applied to runner containers |
+
+The name of a BackupPolicy is at most 45 characters, because Job names (`<policy>-verify-<runID>`) and label values must stay within 63 characters. A CEL rule on the type enforces this.
+
+### How a check result is compared
+
+The runner runs each check inside a read-only transaction with a statement timeout, on the restored copy only. The single returned value is turned into text: booleans become `true` or `false` (not `t` or `f`), everything else uses the driver's text form. The check passes when that text equals `expect` exactly. Multi-statement SQL is rejected.
 
 ## Status
 
 | Field | Meaning |
 |---|---|
 | `observedGeneration` | last spec generation reconciled |
-| `phase` | `Idle`, `BackingUp`, or `Verifying` |
-| `currentRunID` | Unix timestamp of the run in progress, empty when idle |
+| `phase` | `Idle`, `BackingUp`, `Verifying`, or `Pruning` |
+| `currentRunID` | Unix timestamp (scheduled time) of the run in progress, empty when idle |
+| `lastRunID` | `runID` of the most recent run that was started; used with the schedule to decide whether a run is due |
+| `lastReverifyID` | the last value of the `backupvouch.dev/reverify` annotation that was acted on |
 | `lastBackup.time` | when the last backup finished |
 | `lastBackup.result` | `Succeeded` or `Failed` |
 | `lastBackup.objectKey`, `sizeBytes`, `sha256` | the stored artifact |
 | `lastBackup.message` | short reason on failure |
 | `lastVerification.time` | when the last verification finished |
 | `lastVerification.result` | `Passed` or `Failed` |
-| `lastVerification.restoreDurationSeconds` | measured restore time |
+| `lastVerification.objectKey` | the backup object that was verified (the newest verified backup is protected from retention) |
+| `lastVerification.restoreDurationSeconds` | measured restore time in whole seconds (rounded by the controller; CRDs avoid floating-point fields, see D16) |
 | `lastVerification.failedChecks` | names of checks that failed |
 | `lastVerification.message` | short reason on failure |
-| `history` | the last 10 runs: time, objectKey, backup result, verification result |
+| `history` | the last 10 runs: `runID`, time, objectKey, backup result, verification result |
 | `conditions` | see below |
 
 ### Conditions
 
 | Type | True means | False reasons |
 |---|---|---|
-| `BackupReady` | the last backup succeeded | `SourceUnreachable`, `StorageUnreachable`, `BackupJobFailed`, `BackupTimeout` |
-| `RestoreVerified` | the last backup was restored and every check passed | `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `VerificationTimeout`, `InvalidRunnerResult` |
+| `SpecValid` | the spec passed the checks the CRD schema cannot do | `InvalidSchedule`, `InvalidTimeZone`, `RunnerImageNotAllowed` |
+| `BackupReady` | the last backup succeeded | `SourceUnreachable`, `StorageUnreachable`, `SecretMissing`, `BackupJobFailed`, `BackupTimeout`, `InvalidRunnerResult` |
+| `RestoreVerified` | the last backup was restored and every check passed | `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable`, `SecretMissing`, `VerificationTimeout`, `InvalidRunnerResult` |
 
-`RestoreVerified` is `Unknown` until the first verification finishes.
+`BackupReady` and `RestoreVerified` are `Unknown` until the first backup or verification finishes. When `verify.enabled` is false, `RestoreVerified` stays `Unknown` with reason `VerificationDisabled`. While `SpecValid` is False, no new run starts.
+
+## Manual re-verification
+
+To re-check the newest stored backup without taking a new one (for example to detect bit rot, or in the sabotage demo), set an annotation with any new Unix timestamp:
+
+    kubectl annotate backuppolicy app-db backupvouch.dev/reverify="$(date +%s)" --overwrite
+
+When the policy is `Idle`, the controller creates a verification Job named `<policy>-verify-<value>` for `status.lastBackup`, records the value in `status.lastReverifyID`, and updates `lastVerification` and `RestoreVerified` as usual. The same value is never acted on twice.
 
 ## Printer columns
 
@@ -104,9 +125,9 @@ spec:
 
 ## Validation rules
 
-- `schedule` must be a valid five-field cron expression.
-- `timeZone` must be a valid IANA name.
+- `schedule` must be a valid five-field cron expression, and `timeZone` a valid IANA name. The schema checks the shape; the controller checks the rest and reports `SpecValid=False` (`InvalidSchedule`, `InvalidTimeZone`).
 - `retention.keepLast` is at least 1.
-- Check names are unique and match `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`.
+- The BackupPolicy name is at most 45 characters.
+- Check names are unique (list map key) and match `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`. At most 20 checks.
 - `sql` must not be empty. Checks run only against the restored copy.
 - Secret references name Secrets in the same namespace.

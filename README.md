@@ -1,4 +1,9 @@
-<!-- Logo is added in step 1b: <picture> with assets/brand/logo.svg (light and dark) -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+    <img alt="BackupVouch" src="assets/brand/logo.svg" width="320">
+  </picture>
+</p>
 
 # BackupVouch
 
@@ -14,11 +19,10 @@ Backup jobs usually report success when the command exits with code 0. A truncat
 
 ## Planned quickstart
 
-    kind create cluster
-    make install deploy
-    kubectl apply -f config/samples/demo/
+    hack/demo.sh        # creates a kind cluster, then: backup, verify OK, sabotage, verify FAILED
     kubectl get backuppolicies
-    hack/demo.sh        # backup, verify OK, sabotage, verify FAILED
+
+The exact five commands will be fixed in step 7 and match `hack/demo.sh`.
 
 ## Planned example
 
@@ -52,15 +56,16 @@ Backup jobs usually report success when the command exits with code 0. A truncat
 | [docs/TESTING.md](docs/TESTING.md) | test layers and the sabotage demo |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | what to do when something fails |
 | [SECURITY.md](SECURITY.md) | threat model and permissions |
+| [docs/BRAND.md](docs/BRAND.md) | logo concept, palette, usage rules |
 | [AGENTS.md](AGENTS.md) | rules for AI assistants working in this repo |
 
 ## How this differs from other tools
 
-See the comparison in [docs/SPEC.md](docs/SPEC.md). In short: many tools focus on taking backups and restoring on demand; BackupVouch focuses on automatically proving that the latest backup restores. FireDrill is an existing project in the same space, so BackupVouch does not claim to be first; its difference is one resource that takes the backup and proves it. Claims about other projects must be checked against their current documentation before release.
+See the comparison in [docs/SPEC.md](docs/SPEC.md). In short: many tools appear to focus on taking backups and restoring on demand (verify); BackupVouch focuses on automatically proving that the latest backup restores. FireDrill appears to be an existing project in the same space (verify), so BackupVouch does not claim to be first; its difference is one resource that takes the backup and proves it. Claims about other projects must be checked against their current documentation before release.
 
 ## Limitations (planned v0.1)
 
-PostgreSQL only. No point-in-time recovery. Verification checks are SQL you write. No automatic restore into production.
+PostgreSQL only, and one Postgres major version (16) per runner image. No point-in-time recovery. Verification checks are SQL you write. No automatic restore into production.
 
 ## License
 
