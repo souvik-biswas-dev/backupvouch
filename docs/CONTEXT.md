@@ -11,7 +11,7 @@ Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs Pos
 | 1 | documentation foundation | done (consistency review, docs only, see below) |
 | 1b | brand: vector logo, favicon, social preview, docs/BRAND.md | done (files rendered and inspected in the sandbox) |
 | 2 | API types | done; manifests and code generated, tests passing |
-| 3 | scheduling and backup Job | not started |
+| 3 | scheduling and backup Job | done; internal/schedule, internal/jobs, cmd/runner, Dockerfile.runner, tests passing |
 | 4 | restore verification | not started |
 | 5 | controller | not started |
 | 6 | tests and CI | not started |
@@ -58,17 +58,20 @@ Not done in step 2 (by design): cron validation (needs robfig/cron, step 3), the
 - `goconst` flagged repeated strings in table-driven tests (`helpers_test.go`); resolved by setting `ignore-tests: true` in `.golangci.yml` and using `DefaultTimeZone`.
 - Comparisons with Velero, CloudNativePG, K8up and FireDrill in `SPEC.md` are from memory and must be checked against current docs before the README makes any claim.
 - Open items marked VERIFY: Events RBAC group (`events` or `events.k8s.io`), Job status validation in envtest.
-- The runner image build for other Postgres majors is undecided (step 3).
 - Favicon rendering should be looked at once in a real browser tab.
+
+## Step 3 review: what changed and why
+
+1. `internal/schedule`: pure 5-field cron parsing with timezone support and missed run catch-up (`LastScheduledTime`, `IsDue`, `NextRun`). 100% table-driven unit tests pass.
+2. `internal/jobs`: `BuildBackupJob` constructing fully hardened `batch/v1` Job (UID 70, non-root, read-only root, drop capabilities, owner references, S3 and PG secretKeyRef env vars, 63-char name limit).
+3. `cmd/runner`: `backup` subcommand streaming `pg_dump -Fc` to MinIO S3 storage, hashing and byte counting on the fly, zero secrets in logs/messages, structured termination message.
+4. `Dockerfile.runner`: multi-stage build on pinned `postgres:16.8-alpine3.21` with UID 70.
 
 ## Next
 
-Step 3 (scheduling and the backup Job), after the local verify below passes.
+Step 4 (restore verification: cmd/runner verify, checks evaluation, throwaway Postgres in emptyDir, verify Job builder).
 
 ## To verify locally
 
     make manifests generate fmt vet test
-    git diff --stat config/crd config/rbac     # the CRD should now contain spec.source, spec.storage, status.history ...
-    kubectl apply --dry-run=server -f config/samples/backup_v1alpha1_backuppolicy.yaml    # optional, needs a cluster with the CRD installed
 
-The unit tests to watch are in `api/v1alpha1` (`TestSetDefaults`, `TestValidateCheckSQL`, `TestValidateChecks`, `TestValidateTimeZone`). The envtest controller test must still pass; it proves the CRD schema accepts a minimal valid spec and applies defaults. Look at `assets/brand/favicon-32.png` in a browser tab. Paste any errors back with the Fix prompt.

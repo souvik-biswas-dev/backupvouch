@@ -1,0 +1,32 @@
+# Build the runner binary
+FROM golang:1.24-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+# Copy the Go source
+COPY cmd/runner/ cmd/runner/
+COPY api/ api/
+COPY internal/ internal/
+
+# Build statically linked binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o runner cmd/runner/*.go
+
+# Production runner image with PostgreSQL 16 tools
+FROM postgres:16.8-alpine3.21
+
+LABEL org.opencontainers.image.source="https://github.com/souvik-biswas-dev/backupvouch" \
+      org.opencontainers.image.description="BackupVouch runner for PostgreSQL 16"
+
+# Copy the runner binary
+COPY --from=builder /workspace/runner /usr/local/bin/runner
+
+# Run as non-root postgres user (UID 70, GID 70 in alpine)
+USER 70:70
+
+ENTRYPOINT ["/usr/local/bin/runner"]
