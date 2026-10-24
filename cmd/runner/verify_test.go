@@ -108,13 +108,12 @@ func TestLoadVerifyConfig(t *testing.T) {
 	})
 
 	t.Run("all required env provided succeeds", func(t *testing.T) {
-		os.Clearenv()
-		os.Setenv("STORAGE_ENDPOINT", "minio:9000")
-		os.Setenv("STORAGE_BUCKET", "backups")
-		os.Setenv("STORAGE_ACCESS_KEY", "access")
-		os.Setenv("STORAGE_SECRET_KEY", "secret")
-		os.Setenv("OBJECT_KEY", "app/dump.dump")
-		os.Setenv("EXPECTED_SHA256", "abc123hash")
+		t.Setenv("STORAGE_ENDPOINT", "minio:9000")
+		t.Setenv("STORAGE_BUCKET", "backups")
+		t.Setenv("STORAGE_ACCESS_KEY", "access")
+		t.Setenv("STORAGE_SECRET_KEY", "secret")
+		t.Setenv("OBJECT_KEY", "app/dump.dump")
+		t.Setenv("EXPECTED_SHA256", "abc123hash")
 
 		cfg, err := LoadVerifyConfig()
 		if err != nil {

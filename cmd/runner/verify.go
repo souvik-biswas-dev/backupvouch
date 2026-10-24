@@ -143,13 +143,17 @@ func downloadAndHash(ctx context.Context, client *minio.Client, bucket, objectKe
 	if err != nil {
 		return "", err
 	}
-	defer obj.Close()
+	defer func() {
+		_ = obj.Close()
+	}()
 
 	out, err := os.Create(dstFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to create destination dump file: %w", err)
 	}
-	defer out.Close()
+	defer func() {
+		_ = out.Close()
+	}()
 
 	hasher := sha256.New()
 	multiWriter := io.MultiWriter(out, hasher)
@@ -279,7 +283,9 @@ func RunVerify(ctx context.Context) error {
 		_ = writeTerminationLog(cfg.TerminationLog, res)
 		return fmt.Errorf("failed to connect to restored database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	checkResults, allPassed, err := checks.RunChecks(ctx, db, parsedChecks)
 	if err != nil {

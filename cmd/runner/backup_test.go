@@ -175,15 +175,14 @@ func TestLoadBackupConfig(t *testing.T) {
 	})
 
 	t.Run("all required env provided succeeds", func(t *testing.T) {
-		os.Clearenv()
-		os.Setenv("PGDATABASE", "app")
-		os.Setenv("PGUSER", "appuser")
-		os.Setenv("PGPASSWORD", "secret")
-		os.Setenv("STORAGE_ENDPOINT", "minio:9000")
-		os.Setenv("STORAGE_BUCKET", "backups")
-		os.Setenv("STORAGE_ACCESS_KEY", "access")
-		os.Setenv("STORAGE_SECRET_KEY", "secret")
-		os.Setenv("OBJECT_KEY", "app/dump.dump")
+		t.Setenv("PGDATABASE", "app")
+		t.Setenv("PGUSER", "appuser")
+		t.Setenv("PGPASSWORD", "secret")
+		t.Setenv("STORAGE_ENDPOINT", "minio:9000")
+		t.Setenv("STORAGE_BUCKET", "backups")
+		t.Setenv("STORAGE_ACCESS_KEY", "access")
+		t.Setenv("STORAGE_SECRET_KEY", "secret")
+		t.Setenv("OBJECT_KEY", "app/dump.dump")
 
 		cfg, err := LoadBackupConfig()
 		if err != nil {

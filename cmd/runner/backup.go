@@ -296,9 +296,9 @@ func RunBackup(ctx context.Context) error {
 		defer close(pgDone)
 		pgDumpErr = cmd.Run()
 		if pgDumpErr != nil {
-			pw.CloseWithError(pgDumpErr)
+			_ = pw.CloseWithError(pgDumpErr)
 		} else {
-			pw.Close()
+			_ = pw.Close()
 		}
 	}()
 

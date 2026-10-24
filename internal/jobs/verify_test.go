@@ -54,112 +54,120 @@ func TestBuildVerifyJob(t *testing.T) {
 		t.Fatalf("unexpected error building verify job: %v", err)
 	}
 
-	// 1. Name and Namespace
-	expectedName := "app-db-verify-1761271200"
-	if job.Name != expectedName {
-		t.Errorf("job.Name = %q, expected %q", job.Name, expectedName)
-	}
-	if job.Namespace != "default" {
-		t.Errorf("job.Namespace = %q, expected 'default'", job.Namespace)
-	}
-
-	// 2. Labels
-	expectedLabels := map[string]string{
-		backupv1alpha1.LabelPolicy:    "app-db",
-		backupv1alpha1.LabelRunID:     "1761271200",
-		backupv1alpha1.LabelRole:      backupv1alpha1.RoleVerify,
-		backupv1alpha1.LabelManagedBy: backupv1alpha1.ManagedByValue,
-	}
-	for k, v := range expectedLabels {
-		if job.Labels[k] != v {
-			t.Errorf("Job label %q = %q, expected %q", k, job.Labels[k], v)
+	t.Run("job name and namespace", func(t *testing.T) {
+		expectedName := "app-db-verify-1761271200"
+		if job.Name != expectedName {
+			t.Errorf("job.Name = %q, expected %q", job.Name, expectedName)
 		}
-		if job.Spec.Template.Labels[k] != v {
-			t.Errorf("Pod label %q = %q, expected %q", k, job.Spec.Template.Labels[k], v)
+		if job.Namespace != "default" {
+			t.Errorf("job.Namespace = %q, expected 'default'", job.Namespace)
 		}
-	}
+	})
 
-	// 3. Owner Reference
-	if len(job.OwnerReferences) != 1 {
-		t.Fatalf("expected 1 owner reference, got %d", len(job.OwnerReferences))
-	}
-	owner := job.OwnerReferences[0]
-	if owner.Kind != "BackupPolicy" || owner.Name != "app-db" {
-		t.Errorf("unexpected owner reference: %+v", owner)
-	}
+	t.Run("labels", func(t *testing.T) {
+		expectedLabels := map[string]string{
+			backupv1alpha1.LabelPolicy:    "app-db",
+			backupv1alpha1.LabelRunID:     "1761271200",
+			backupv1alpha1.LabelRole:      backupv1alpha1.RoleVerify,
+			backupv1alpha1.LabelManagedBy: backupv1alpha1.ManagedByValue,
+		}
+		for k, v := range expectedLabels {
+			if job.Labels[k] != v {
+				t.Errorf("Job label %q = %q, expected %q", k, job.Labels[k], v)
+			}
+			if job.Spec.Template.Labels[k] != v {
+				t.Errorf("Pod label %q = %q, expected %q", k, job.Spec.Template.Labels[k], v)
+			}
+		}
+	})
 
-	// 4. Job spec
-	if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 1 {
-		t.Errorf("backoffLimit = %v, expected 1", job.Spec.BackoffLimit)
-	}
-	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != 600 {
-		t.Errorf("activeDeadlineSeconds = %v, expected 600", job.Spec.ActiveDeadlineSeconds)
-	}
-	if job.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-		t.Errorf("restartPolicy = %v, expected Never", job.Spec.Template.Spec.RestartPolicy)
-	}
+	t.Run("owner reference", func(t *testing.T) {
+		if len(job.OwnerReferences) != 1 {
+			t.Fatalf("expected 1 owner reference, got %d", len(job.OwnerReferences))
+		}
+		owner := job.OwnerReferences[0]
+		if owner.Kind != "BackupPolicy" || owner.Name != "app-db" {
+			t.Errorf("unexpected owner reference: %+v", owner)
+		}
+	})
 
-	// 5. Scratch and Tmp Volumes
-	volumeMap := make(map[string]corev1.Volume)
-	for _, v := range job.Spec.Template.Spec.Volumes {
-		volumeMap[v.Name] = v
-	}
-	scratchVol, hasScratch := volumeMap[ScratchVolumeName]
-	if !hasScratch {
-		t.Fatalf("missing scratch volume in pod spec")
-	}
-	if scratchVol.EmptyDir == nil || scratchVol.EmptyDir.SizeLimit.String() != "5Gi" {
-		t.Errorf("scratch sizeLimit = %v, expected 5Gi", scratchVol.EmptyDir.SizeLimit)
-	}
+	t.Run("job spec settings", func(t *testing.T) {
+		if job.Spec.BackoffLimit == nil || *job.Spec.BackoffLimit != 1 {
+			t.Errorf("backoffLimit = %v, expected 1", job.Spec.BackoffLimit)
+		}
+		if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != 600 {
+			t.Errorf("activeDeadlineSeconds = %v, expected 600", job.Spec.ActiveDeadlineSeconds)
+		}
+		if job.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+			t.Errorf("restartPolicy = %v, expected Never", job.Spec.Template.Spec.RestartPolicy)
+		}
+	})
 
-	// 6. Container
-	if len(job.Spec.Template.Spec.Containers) != 1 {
-		t.Fatalf("expected 1 container, got %d", len(job.Spec.Template.Spec.Containers))
-	}
-	container := job.Spec.Template.Spec.Containers[0]
-	if len(container.Args) != 1 || container.Args[0] != "verify" {
-		t.Errorf("container.Args = %v, expected ['verify']", container.Args)
-	}
+	t.Run("scratch and tmp volumes", func(t *testing.T) {
+		volumeMap := make(map[string]corev1.Volume)
+		for _, v := range job.Spec.Template.Spec.Volumes {
+			volumeMap[v.Name] = v
+		}
+		scratchVol, hasScratch := volumeMap[ScratchVolumeName]
+		if !hasScratch {
+			t.Fatalf("missing scratch volume in pod spec")
+		}
+		if scratchVol.EmptyDir == nil || scratchVol.EmptyDir.SizeLimit.String() != "5Gi" {
+			t.Errorf("scratch sizeLimit = %v, expected 5Gi", scratchVol.EmptyDir.SizeLimit)
+		}
+	})
 
-	mountMap := make(map[string]corev1.VolumeMount)
-	for _, m := range container.VolumeMounts {
-		mountMap[m.Name] = m
-	}
-	if mountMap[ScratchVolumeName].MountPath != "/scratch" {
-		t.Errorf("scratch mount path = %q, expected /scratch", mountMap[ScratchVolumeName].MountPath)
-	}
-	if mountMap[TmpVolumeName].MountPath != "/tmp" {
-		t.Errorf("tmp mount path = %q, expected /tmp", mountMap[TmpVolumeName].MountPath)
-	}
+	t.Run("container args and mounts", func(t *testing.T) {
+		if len(job.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("expected 1 container, got %d", len(job.Spec.Template.Spec.Containers))
+		}
+		container := job.Spec.Template.Spec.Containers[0]
+		if len(container.Args) != 1 || container.Args[0] != "verify" {
+			t.Errorf("container.Args = %v, expected ['verify']", container.Args)
+		}
 
-	// 7. Verify NO database credentials are in environment
-	envMap := make(map[string]corev1.EnvVar)
-	for _, env := range container.Env {
-		envMap[env.Name] = env
-	}
+		mountMap := make(map[string]corev1.VolumeMount)
+		for _, m := range container.VolumeMounts {
+			mountMap[m.Name] = m
+		}
+		if mountMap[ScratchVolumeName].MountPath != "/scratch" {
+			t.Errorf("scratch mount path = %q, expected /scratch", mountMap[ScratchVolumeName].MountPath)
+		}
+		if mountMap[TmpVolumeName].MountPath != "/tmp" {
+			t.Errorf("tmp mount path = %q, expected /tmp", mountMap[TmpVolumeName].MountPath)
+		}
+	})
 
-	if _, hasPGPass := envMap["PGPASSWORD"]; hasPGPass {
-		t.Errorf("security violation: PGPASSWORD must NOT be present in verify Job")
-	}
-	if _, hasPGUser := envMap["PGUSER"]; hasPGUser {
-		t.Errorf("security violation: PGUSER must NOT be present in verify Job")
-	}
+	t.Run("environment variables without database secrets", func(t *testing.T) {
+		container := job.Spec.Template.Spec.Containers[0]
+		envMap := make(map[string]corev1.EnvVar)
+		for _, env := range container.Env {
+			envMap[env.Name] = env
+		}
 
-	if envMap["OBJECT_KEY"].Value != objectKey {
-		t.Errorf("OBJECT_KEY = %q, expected %q", envMap["OBJECT_KEY"].Value, objectKey)
-	}
-	if envMap["EXPECTED_SHA256"].Value != expectedSHA256 {
-		t.Errorf("EXPECTED_SHA256 = %q, expected %q", envMap["EXPECTED_SHA256"].Value, expectedSHA256)
-	}
-	if envMap["DATABASE_NAME"].Value != "app" {
-		t.Errorf("DATABASE_NAME = %q, expected 'app'", envMap["DATABASE_NAME"].Value)
-	}
-	if envMap["SCRATCH_DIR"].Value != "/scratch" {
-		t.Errorf("SCRATCH_DIR = %q, expected /scratch", envMap["SCRATCH_DIR"].Value)
-	}
-	if !strings.Contains(envMap["CHECKS_JSON"].Value, "users-count") {
-		t.Errorf("CHECKS_JSON = %q does not contain checks", envMap["CHECKS_JSON"].Value)
-	}
+		if _, hasPGPass := envMap["PGPASSWORD"]; hasPGPass {
+			t.Errorf("security violation: PGPASSWORD must NOT be present in verify Job")
+		}
+		if _, hasPGUser := envMap["PGUSER"]; hasPGUser {
+			t.Errorf("security violation: PGUSER must NOT be present in verify Job")
+		}
+
+		if envMap["OBJECT_KEY"].Value != objectKey {
+			t.Errorf("OBJECT_KEY = %q, expected %q", envMap["OBJECT_KEY"].Value, objectKey)
+		}
+		if envMap["EXPECTED_SHA256"].Value != expectedSHA256 {
+			t.Errorf("EXPECTED_SHA256 = %q, expected %q", envMap["EXPECTED_SHA256"].Value, expectedSHA256)
+		}
+		if envMap["DATABASE_NAME"].Value != "app" {
+			t.Errorf("DATABASE_NAME = %q, expected 'app'", envMap["DATABASE_NAME"].Value)
+		}
+		if envMap["SCRATCH_DIR"].Value != "/scratch" {
+			t.Errorf("SCRATCH_DIR = %q, expected /scratch", envMap["SCRATCH_DIR"].Value)
+		}
+		if !strings.Contains(envMap["CHECKS_JSON"].Value, "users-count") {
+			t.Errorf("CHECKS_JSON = %q does not contain checks", envMap["CHECKS_JSON"].Value)
+		}
+	})
 }
 
 func TestBuildVerifyJobNameTooLong(t *testing.T) {

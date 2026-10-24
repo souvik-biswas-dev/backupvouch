@@ -158,7 +158,9 @@ func RunCheck(ctx context.Context, db *sql.DB, check backupv1alpha1.Check) Check
 			Message: sanitizeMessage(fmt.Sprintf("query error: %v", err)),
 		}
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	cols, err := rows.Columns()
 	if err != nil {
