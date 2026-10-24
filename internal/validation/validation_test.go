@@ -30,10 +30,10 @@ func TestValidateSpec(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		policy       *backupv1alpha1.BackupPolicy
-		wantValid    bool
-		wantReason   string
+		name       string
+		policy     *backupv1alpha1.BackupPolicy
+		wantValid  bool
+		wantReason string
 	}{
 		{
 			name: "valid standard policy",
