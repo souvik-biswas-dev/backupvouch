@@ -53,7 +53,8 @@ type BackupPolicyReconciler struct {
 	NowFunc                    func() time.Time
 }
 
-// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=get;list;watch
+// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=create;update;patch;delete
 // +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
