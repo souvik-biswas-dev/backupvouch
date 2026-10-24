@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -59,7 +59,7 @@ func LoadPruneConfig() (*PruneConfig, error) {
 		StorageEndpoint: os.Getenv("STORAGE_ENDPOINT"),
 		StorageBucket:   os.Getenv("STORAGE_BUCKET"),
 		StoragePrefix:   os.Getenv("STORAGE_PREFIX"),
-		StorageUseTLS:   os.Getenv("STORAGE_USE_TLS") == "true",
+		StorageUseTLS:   os.Getenv("STORAGE_USE_TLS") == envTrue,
 		StorageAccess:   os.Getenv("STORAGE_ACCESS_KEY"),
 		StorageSecret:   os.Getenv("STORAGE_SECRET_KEY"),
 		KeepLast:        keepLast,
@@ -123,8 +123,14 @@ func RunPrune(ctx context.Context) error {
 	}
 
 	// Sort newest first
-	sort.Slice(objects, func(i, j int) bool {
-		return objects[i].LastModified.After(objects[j].LastModified)
+	slices.SortFunc(objects, func(a, b minio.ObjectInfo) int {
+		if a.LastModified.After(b.LastModified) {
+			return -1
+		}
+		if a.LastModified.Before(b.LastModified) {
+			return 1
+		}
+		return 0
 	})
 
 	deleted := 0

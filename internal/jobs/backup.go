@@ -157,40 +157,40 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 			},
 		},
 		{
-			Name:  "STORAGE_ENDPOINT",
+			Name:  EnvStorageEndpoint,
 			Value: policy.Spec.Storage.Endpoint,
 		},
 		{
-			Name:  "STORAGE_BUCKET",
+			Name:  EnvStorageBucket,
 			Value: policy.Spec.Storage.Bucket,
 		},
 		{
-			Name:  "STORAGE_PREFIX",
+			Name:  EnvStoragePrefix,
 			Value: policy.Spec.Storage.Prefix,
 		},
 		{
-			Name:  "STORAGE_USE_TLS",
+			Name:  EnvStorageUseTLS,
 			Value: strconv.FormatBool(policy.Spec.Storage.UseTLS),
 		},
 		{
-			Name: "STORAGE_ACCESS_KEY",
+			Name: EnvStorageAccessKey,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: policy.Spec.Storage.CredentialsSecretRef.Name,
 					},
-					Key: "accessKey",
+					Key: SecretKeyAccessKey,
 				},
 			},
 		},
 		{
-			Name: "STORAGE_SECRET_KEY",
+			Name: EnvStorageSecretKey,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: policy.Spec.Storage.CredentialsSecretRef.Name,
 					},
-					Key: "secretKey",
+					Key: SecretKeySecretKey,
 				},
 			},
 		},
@@ -203,7 +203,7 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 			Value: runIDStr,
 		},
 		{
-			Name:  "TMPDIR",
+			Name:  EnvTmpDir,
 			Value: TmpMountPath,
 		},
 	}
@@ -213,7 +213,7 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 	ownerRefs := []metav1.OwnerReference{
 		{
 			APIVersion:         backupv1alpha1.GroupVersion.String(),
-			Kind:               "BackupPolicy",
+			Kind:               KindBackupPolicy,
 			Name:               policy.Name,
 			UID:                policy.UID,
 			Controller:         &isController,
@@ -223,8 +223,8 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 
 	job := &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "batch/v1",
-			Kind:       "Job",
+			APIVersion: APIVersionBatchV1,
+			Kind:       KindJob,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            jobName,
@@ -272,7 +272,7 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 								RunAsUser:                &uid,
 								RunAsGroup:               &uid,
 								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
+									Drop: []corev1.Capability{CapabilityAll},
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -282,7 +282,7 @@ func BuildBackupJob(policy *backupv1alpha1.BackupPolicy, runID int64) (*batchv1.
 								},
 							},
 							Resources:                resources,
-							TerminationMessagePath:   "/dev/termination-log",
+							TerminationMessagePath:   TerminationLogPath,
 							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 						},
 					},
