@@ -19,10 +19,10 @@ Backup jobs usually report success when the command exits with code 0. A truncat
 
 ## Planned quickstart
 
-    hack/demo.sh        # creates a kind cluster, then: backup, verify OK, sabotage, verify FAILED
-    kubectl get backuppolicies
+    make demo           # builds the images, creates a kind cluster, then: backup, verify OK, sabotage, verify FAILED
+    make demo-clean     # delete the demo cluster afterwards
 
-The exact five commands will be fixed in step 7 and match `hack/demo.sh`.
+It needs docker, kind and kubectl and prints the BackupPolicy status and events after each stage. See `docs/TESTING.md`. To install the operator in your own cluster see `docs/INSTALL.md`.
 
 ## Planned example
 
@@ -37,9 +37,9 @@ The exact five commands will be fixed in step 7 and match `hack/demo.sh`.
         database: app
         credentialsSecretRef: { name: pg-creds }
       storage:
-        endpoint: minio.default.svc:9000
+        endpoint: s3.default.svc:8333
         bucket: backups
-        credentialsSecretRef: { name: minio-creds }
+        credentialsSecretRef: { name: s3-creds }
       verify:
         checks:
           - name: users-not-empty
@@ -53,7 +53,8 @@ The exact five commands will be fixed in step 7 and match `hack/demo.sh`.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | components, reconcile flow, state machine |
 | [docs/API.md](docs/API.md) | BackupPolicy reference |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | design decisions and reasons |
-| [docs/TESTING.md](docs/TESTING.md) | test layers and the sabotage demo |
+| [docs/INSTALL.md](docs/INSTALL.md) | install, runner image allow-list, uninstall |
+| [docs/TESTING.md](docs/TESTING.md) | test layers, the sabotage demo, CI |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | what to do when something fails |
 | [SECURITY.md](SECURITY.md) | threat model and permissions |
 | [docs/BRAND.md](docs/BRAND.md) | logo concept, palette, usage rules |

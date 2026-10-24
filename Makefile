@@ -1,5 +1,9 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+# Image tags are pinned, never :latest. The operator image follows VERSION; the default runner image
+# (and its tag) is the DefaultRunnerImage constant in internal/jobs/backup.go, published by
+# .github/workflows/publish-images.yml from a tag that equals it.
+VERSION ?= v0.1.0
+IMG ?= ghcr.io/souvik-biswas-dev/backupvouch:$(VERSION)
 # YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
 YEAR ?= $(shell date +%Y)
 
@@ -63,36 +67,37 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-# TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
-# kubectl kuberc is disabled by default for test isolation; enable with:
-# - KUBECTL_KUBERC=true
-# CertManager is installed by default; skip with:
-# - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= backupvouch-test-e2e
+##@ Verification
 
-.PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+# The local verify command (also run by CI): generate, format, vet, unit and envtest tests.
+.PHONY: verify
+verify: manifests generate fmt vet test ## Run the full local verification (everything except lint and e2e).
 
-.PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
+# End-to-end test in a throwaway kind cluster, see docs/TESTING.md. Needs docker, kind and kubectl.
+# Variables: KIND_CLUSTER (cluster name), E2E_KEEP_CLUSTER=true (do not delete the cluster afterwards).
+KIND_CLUSTER ?= backupvouch-e2e
+RUNNER_IMG ?= $(shell sed -n 's/.*DefaultRunnerImage = "\(.*\)"/\1/p' internal/jobs/backup.go)
 
-.PHONY: cleanup-test-e2e
-cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
-	@$(KIND) delete cluster --name $(KIND_CLUSTER)
+.PHONY: e2e
+e2e: ## Run hack/e2e.sh: backup, verify, then sabotage and expect a failed verification.
+	KIND=$(KIND) E2E_CLUSTER=$(KIND_CLUSTER) bash hack/e2e.sh
+
+# The narrated demo (hack/demo.sh): same steps as e2e, with commentary, status and events after each stage.
+# The kind cluster is kept afterwards (DEMO_KEEP_CLUSTER=false deletes it). Needs docker, kind and kubectl.
+DEMO_CLUSTER ?= backupvouch-demo
+
+.PHONY: demo
+demo: ## Run the narrated demo in a kind cluster: backup, verify OK, sabotage, verify FAILED.
+	KIND=$(KIND) DEMO_CLUSTER=$(DEMO_CLUSTER) bash hack/demo.sh
+
+.PHONY: demo-clean
+demo-clean: ## Delete the demo kind cluster.
+	$(KIND) delete cluster --name $(DEMO_CLUSTER)
+
+.PHONY: demo-transcript
+demo-transcript: ## Run the demo and save the real output to dist/demo-transcript.txt (for docs/TESTING.md).
+	mkdir -p dist
+	KIND=$(KIND) DEMO_CLUSTER=$(DEMO_CLUSTER) bash -o pipefail -c 'bash hack/demo.sh 2>&1 | tee dist/demo-transcript.txt'
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -125,6 +130,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build $(if $(BASE_IMAGE),--build-arg BASE_IMAGE=$(BASE_IMAGE)) -t ${IMG} .
 
+# The runner image must carry the tag the operator uses by default (internal/jobs DefaultRunnerImage),
+# so a kind cluster can run it without pulling from a registry.
+.PHONY: docker-build-runner
+docker-build-runner: ## Build the runner image (Dockerfile.runner).
+	$(CONTAINER_TOOL) build -f Dockerfile.runner -t $(RUNNER_IMG) .
+
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
@@ -146,11 +157,28 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	- $(CONTAINER_TOOL) buildx rm backupvouch-builder
 	rm Dockerfile.cross
 
+# Writes dist/install.yaml (CRD, RBAC, Deployment) with the operator image pinned to IMG.
+# The kustomization edit is undone afterwards, so the working tree stays clean.
 .PHONY: build-installer
-build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+build-installer: manifests generate kustomize ## Generate dist/install.yaml with pinned image tags (IMG must not be :latest).
+	@img="$(IMG)"; name="$${img##*/}"; \
+	case "$$name" in \
+	  *:latest|*:|"") echo "IMG must have a pinned tag, not :latest or empty (got '$$img')" >&2; exit 1;; \
+	  *:*) ;; \
+	  *) echo "IMG must include a tag (got '$$img')" >&2; exit 1;; \
+	esac
 	mkdir -p dist
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
+	@set -e; \
+	cp config/manager/kustomization.yaml "$(LOCALBIN)/manager-kustomization.bak"; \
+	trap 'cp "$(LOCALBIN)/manager-kustomization.bak" config/manager/kustomization.yaml' EXIT; \
+	( cd config/manager && "$(KUSTOMIZE)" edit set image controller=$(IMG) ); \
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	@if grep -nE 'image:.*:latest' dist/install.yaml; then \
+	  echo "dist/install.yaml contains a :latest image" >&2; rm -f dist/install.yaml; exit 1; \
+	fi
+	@echo "wrote dist/install.yaml"
+	@echo "  operator image:       $(IMG)"
+	@echo "  default runner image: $(RUNNER_IMG) (other runner images need --allowed-runner-images, see docs/INSTALL.md)"
 
 ##@ Deployment
 

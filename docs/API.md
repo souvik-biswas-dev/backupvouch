@@ -22,12 +22,12 @@ spec:
     credentialsSecretRef:
       name: pg-creds            # keys: username, password
   storage:
-    endpoint: minio.default.svc:9000
+    endpoint: s3.default.svc:8333
     bucket: backups
     prefix: app/
     useTLS: false
     credentialsSecretRef:
-      name: minio-creds         # keys: accessKey, secretKey
+      name: s3-creds            # keys: accessKey, secretKey
   retention:
     keepLast: 7
   backupTimeoutSeconds: 1800
@@ -108,6 +108,8 @@ The runner runs each check inside a read-only transaction with a statement timeo
 | `SpecValid` | the spec passed the checks the CRD schema cannot do | `InvalidSchedule`, `InvalidTimeZone`, `RunnerImageNotAllowed` |
 | `BackupReady` | the last backup succeeded | `SourceUnreachable`, `StorageUnreachable`, `SecretMissing`, `BackupJobFailed`, `BackupTimeout`, `InvalidRunnerResult` |
 | `RestoreVerified` | the last backup was restored and every check passed | `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable`, `SecretMissing`, `VerificationTimeout`, `InvalidRunnerResult` |
+
+When a condition is True the reason is `SpecValid`, `BackupSucceeded` or `VerificationPassed`; before the first run the reason is `NoRunYet`.
 
 `BackupReady` and `RestoreVerified` are `Unknown` until the first backup or verification finishes. When `verify.enabled` is false, `RestoreVerified` stays `Unknown` with reason `VerificationDisabled`. While `SpecValid` is False, no new run starts.
 

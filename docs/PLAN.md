@@ -2,16 +2,36 @@
 
 BackupVouch (written `backupvouch` in the repo, Go module, images, API group and metric prefix) is a Kubernetes operator in Go (kubebuilder) that runs database backups on a schedule, restores each one into a scratch environment, runs checks, and vouches for the backup only if it is actually usable. Keep the name the same in every step.
 
+## Progress (updated 2026-10-25)
+
+| Step | What | State |
+|---|---|---|
+| 0 | scaffold | done |
+| 1 | review the drafted documents | done |
+| 1b | brand identity | done |
+| 2 | API types | done |
+| 3 | scheduling and backup Job | done |
+| 4 | restore verification | done |
+| 5 | controller | done (envtest happy path included) |
+| 6 | tests and CI | written, **not run yet**: run `make verify` and `make e2e` locally first |
+| 6b | close the gaps found in the step 6 audit | next (small, optional before step 7) |
+| 7 | packaging and demo | not started |
+| 8 | optional dashboard | not started |
+| 9 | final docs and polish | not started |
+
+`docs/CONTEXT.md` has the details: what exists, where the code still differs from `docs/API.md` and `docs/ARCHITECTURE.md`, and what to verify locally. Steps marked done keep their prompts below as a record; do not re-run them.
+
 ## How this works
 
 1. One step = one chat. Open a new chat on any account, upload the latest zip, paste the **Global rules** block, then paste that step's prompt.
 2. Every step ends with a zip of the whole repo (`backupvouch-stepN.zip`). If a free limit hits, switch accounts, upload that zip, paste the **Resume prompt**, and carry on.
-3. Claude's chat sandbox usually has no Go toolchain and cannot download Go modules, so it cannot compile or test this project. Code is written carefully but **unverified until you run it locally**. After each step, run the verify command on your machine and paste any errors into the chat (use the **Fix prompt**) before moving on.
+3. Claude's chat sandbox usually has no usable Go toolchain (it may have an older Go, such as 1.24, while this module needs 1.26) and cannot download Go modules, so it cannot compile or test this project. It can run `gofmt`, `bash -n` and YAML parsing. Code is written carefully but **unverified until you run it locally**. After each step, run the verify command on your machine and paste any errors into the chat (use the **Fix prompt**) before moving on.
 4. `docs/CONTEXT.md` is the handoff file. It always says what is done, what is next, and what is broken.
 
 Local verify command (run inside the repo after unzipping):
 
-    make manifests generate fmt vet test
+    make verify          # same as: make manifests generate fmt vet test
+    make e2e             # kind end-to-end with the sabotage check (from step 6, needs docker, kind, kubectl)
 
 ## Documents the repo ends up with (10 core)
 
@@ -29,7 +49,7 @@ Local verify command (run inside the repo after unzipping):
 | SECURITY.md | threat model, RBAC, secrets handling | 9 |
 | docs/BRAND.md | logo concept, palette, usage rules (plus the files in assets/brand/) | 1b |
 
-All ten were drafted for you and ship in `backupvouch-docs.zip`; later steps update them as the code lands. Optional: CONTRIBUTING.md, CHANGELOG.md (step 9), docs/DESIGN.md (only if you build the dashboard in step 8).
+All ten were drafted for you and ship in `backupvouch-docs.zip`; later steps update them as the code lands. State after step 6: SPEC, ARCHITECTURE, API, DECISIONS (D1 to D18), BRAND and AGENTS are current; TESTING is current for step 6; SECURITY has its RBAC table updated; README still says "design phase" and RUNBOOK is still planned text (step 9). Optional: CONTRIBUTING.md, CHANGELOG.md (step 9), docs/DESIGN.md (only if you build the dashboard in step 8).
 
 ---
 
@@ -42,7 +62,7 @@ my checks, and reports whether the backup is really usable. v1 supports PostgreS
 It's a public portfolio project for backend/DevOps roles.
 
 Hard constraints
-- Zero cost: kind cluster locally, MinIO in-cluster as S3 storage, no cloud accounts,
+- Zero cost: kind cluster locally, an in-cluster S3 store (SeaweedFS since step 7a, MinIO images are gone) as S3 storage, no cloud accounts,
   no paid APIs.
 - Keep the kubebuilder scaffold layout (api/, internal/controller/, cmd/, config/).
 - CRD: group backup.backupvouch.dev, version v1alpha1, kind BackupPolicy.
@@ -72,15 +92,27 @@ Working rules
 ## Resume prompt (use after switching accounts or starting a new chat)
 
 ~~~text
-Resume BackupVouch. The attached zip is the latest repo state. Read AGENTS.md and
-docs/CONTEXT.md first, then do Step N from docs/PLAN.md. My local verify result:
-<paste output, or write "not run yet">.
+Resume BackupVouch. The attached zip is the latest repo state. Read AGENTS.md,
+docs/PLAN.md and docs/CONTEXT.md first, then do Step N from docs/PLAN.md, skipping
+anything that already exists. My local verify result: <paste output, or write "not run yet">.
+~~~
+
+## Audit prompt (use when a different tool or chat did some steps, or CONTEXT.md may be stale)
+
+~~~text
+Resume BackupVouch. The attached zip is the latest repo state. Steps up to N were done by
+a different tool, so docs/CONTEXT.md may be out of date. Before doing anything else, read
+AGENTS.md, docs/PLAN.md and docs/CONTEXT.md, then compare the plan with the actual code
+(api/, internal/, cmd/, config/, assets/) and tell me in a short list what exists, what is
+missing, and where the code differs from docs/API.md and docs/ARCHITECTURE.md. Fix
+docs/CONTEXT.md to match reality. Then do Step N+1 from docs/PLAN.md, skipping anything
+that already exists. My local verify result: <paste output>. GitHub main is at commit <sha>.
 ~~~
 
 ## Fix prompt (use when the local verify command fails)
 
 ~~~text
-Here is the output of `make manifests generate fmt vet test` on my machine. Fix only what
+Here is the output of `make verify` (or `make e2e`) on my machine. Fix only what
 these errors point to, keep the change minimal, don't refactor, update docs/CONTEXT.md,
 and give me a new zip backupvouch-stepN-fix.zip.
 <paste errors>
@@ -88,7 +120,7 @@ and give me a new zip backupvouch-stepN-fix.zip.
 
 ---
 
-## Step 0: scaffold the project (you, locally, about 10 minutes)
+## Step 0: scaffold the project (you, locally, about 10 minutes) [DONE]
 
 Claude can't run kubebuilder in its sandbox, so you create the scaffold. Prerequisites: Go, Docker, kubectl, kind, kubebuilder.
 
@@ -106,7 +138,7 @@ Claude can't run kubebuilder in its sandbox, so you create the scaffold. Prerequ
 
 ---
 
-## Step 1: review the drafted documents (no Go code)
+## Step 1: review the drafted documents (no Go code) [DONE]
 
 The ten documents were already drafted in `backupvouch-docs.zip`. This step is a consistency review, so later steps can trust them.
 
@@ -132,7 +164,7 @@ Make the edits, update docs/CONTEXT.md, and give me the zip backupvouch-step1.zi
 
 ---
 
-## Step 1b: brand identity (vector logo and favicon)
+## Step 1b: brand identity (vector logo and favicon) [DONE]
 
 ~~~text
 Step 1b. Upload: the latest zip. Create the BackupVouch brand identity as hand-authored
@@ -186,7 +218,7 @@ Update docs/CONTEXT.md and give me the zip backupvouch-step1b.zip.
 
 ---
 
-## Step 2: API types
+## Step 2: API types [DONE]
 
 ~~~text
 Step 2. Upload: the latest zip. Implement api/v1alpha1/backuppolicy_types.go exactly as
@@ -204,7 +236,7 @@ Remind me to run `make manifests generate` and the verify command.
 
 ---
 
-## Step 3: scheduling and the backup Job
+## Step 3: scheduling and the backup Job [DONE]
 
 ~~~text
 Step 3. Upload: the latest zip. Implement scheduled backups.
@@ -226,7 +258,7 @@ Step 3. Upload: the latest zip. Implement scheduled backups.
 
 ---
 
-## Step 4: restore verification
+## Step 4: restore verification [DONE]
 
 ~~~text
 Step 4. Upload: the latest zip. Implement verification.
@@ -246,7 +278,7 @@ Step 4. Upload: the latest zip. Implement verification.
 
 ---
 
-## Step 5: the controller
+## Step 5: the controller [DONE]
 
 ~~~text
 Step 5. Upload: the latest zip. Wire everything into the reconciler.
@@ -268,7 +300,11 @@ Step 5. Upload: the latest zip. Wire everything into the reconciler.
 
 ---
 
-## Step 6: tests and CI
+## Step 6: tests and CI [WRITTEN, run it locally]
+
+Done in step 6 (see `docs/TESTING.md`): failure-path and idempotency envtest specs (`internal/controller/backuppolicy_failures_test.go`, next to the happy-path spec from step 5), `hack/e2e.sh` with fixtures in `hack/e2e/` (kind, MinIO, seeded Postgres, healthy case, then the sabotage check with `backupvouch.dev/reverify`), Makefile targets `verify`, `e2e` and `docker-build-runner`, the three workflows adapted (`test.yml` runs `make verify` and checks for uncommitted generated files, `test-e2e.yml` runs `make e2e`), the scaffold Ginkgo e2e removed (D17), the events RBAC group and Job deletion fixes (D18).
+
+If something fails locally, use the Fix prompt with the output of `make verify` or `make e2e`. The original prompt, kept for reference:
 
 ~~~text
 Step 6. Upload: the latest zip. Add the test layers described in docs/TESTING.md.
@@ -287,18 +323,46 @@ Step 6. Upload: the latest zip. Add the test layers described in docs/TESTING.md
 
 ---
 
-## Step 7: packaging and the demo
+## Step 6b: close the gaps found in the step 6 audit (small, do before step 7)
+
+These are places where the code differs from `docs/ARCHITECTURE.md`; the full table is in `docs/CONTEXT.md` ("Where the code differs from the docs", items a to e).
 
 ~~~text
-Step 7. Upload: the latest zip. Make it easy to install and demo.
+Step 6b. Upload: the latest zip. Fix only these, each with an envtest or unit test, and
+update docs/CONTEXT.md:
+a. call metrics.UpdatePolicyMetrics at the start of every reconcile so gauges survive an
+   operator restart;
+b. in reconcileVerifying, recreate the verification Job from status.lastBackup when it is
+   missing, like BackingUp and Pruning do;
+c. only accept the verification failure reasons ChecksumMismatch, RestoreFailed,
+   CheckFailed and StorageUnreachable from the runner; map anything else to
+   InvalidRunnerResult;
+d. keep the runner's failure message and the failed check messages in
+   status.lastVerification.message (max 120 characters, no row data);
+e. in InspectJobPods read the termination message of the newest terminated Pod.
+Do not change anything else.
+~~~
 
-- config/default and an install kustomization; image build targets (docker-build,
-  docker-build-runner).
-- config/samples/demo/: MinIO, a Postgres with seed data, and a BackupPolicy.
+---
+
+## Step 7: packaging and the demo
+
+Already present (do not redo): `make docker-build`, `make docker-build-runner`, `make deploy`, `make e2e`, the fixtures in `hack/e2e/` (MinIO, Postgres with seed data, a BackupPolicy), `config/default` with the CRD, RBAC and manager.
+
+~~~text
+Step 7. Upload: the latest zip. Make it easy to install and demo, skipping anything that
+already exists.
+
+- An install kustomization and `make build-installer` producing dist/install.yaml with pinned
+  image tags (no :latest); check that the allowed-runner-images setting is documented.
+- config/samples/demo/: reuse or move the fixtures from hack/e2e/ (MinIO, Postgres with seed
+  data, BackupPolicy) so the e2e script and the demo share one copy.
 - hack/demo.sh: one command that spins up kind and runs the whole story: backup, verify
-  OK, sabotage, verify FAILED, and prints the status and the events each time.
-- Optional GitHub Actions job that publishes images to ghcr.io (free for public repos).
-- Add the demo transcript to docs/TESTING.md.
+  OK, sabotage, verify FAILED, and prints the status and the events each time. Reuse the
+  helper functions and steps of hack/e2e.sh instead of copying them.
+- Optional GitHub Actions job that publishes images to ghcr.io (free for public repos),
+  using the tag the operator uses by default (internal/jobs DefaultRunnerImage).
+- Add the demo transcript, with real output, to docs/TESTING.md.
 ~~~
 
 ---
@@ -380,6 +444,10 @@ Step 9. Upload: the latest zip. Finish the documentation and repository polish.
   the README limitations.
 - Suggest a GitHub repository description and topics, and remind me to upload assets/brand/social-preview.png in the repository settings (Social preview).
 - Check the README logo renders on GitHub in both light and dark mode.
+- Remove the "design phase" banner from the README, replace the planned sections with real
+  output from hack/demo.sh, and turn the planned text in docs/RUNBOOK.md into real output.
+- Check the open items in docs/CONTEXT.md ("Known issues") are fixed or listed in the README
+  limitations, and check the name availability (GitHub, pkg.go.dev, Artifact Hub, D9).
 ~~~
 
 ---

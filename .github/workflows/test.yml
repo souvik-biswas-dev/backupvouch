@@ -23,7 +23,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Running Tests
-        run: |
-          go mod tidy
-          make test
+      # Runs: make manifests generate fmt vet test (unit tests and envtest controller tests).
+      - name: Verify
+        run: make verify
+
+      # Generated code, CRDs and RBAC, and formatting must be committed, so CI shows no difference.
+      - name: Check generated files are committed
+        run: git diff --exit-code

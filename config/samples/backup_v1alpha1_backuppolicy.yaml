@@ -17,12 +17,12 @@ spec:
     credentialsSecretRef:
       name: pg-creds            # Secret keys: username, password
   storage:
-    endpoint: minio.default.svc:9000
+    endpoint: s3.default.svc:8333
     bucket: backups
     prefix: app/
     useTLS: false
     credentialsSecretRef:
-      name: minio-creds         # Secret keys: accessKey, secretKey
+      name: s3-creds            # Secret keys: accessKey, secretKey
   retention:
     keepLast: 7
   backupTimeoutSeconds: 1800

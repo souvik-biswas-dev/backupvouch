@@ -1,0 +1,8 @@
+# Fixtures shared by hack/e2e.sh and hack/demo.sh: an S3 store (SeaweedFS), a seeded Postgres and the BackupPolicy.
+# Test credentials only, never reuse them. The scripts apply the files in stages (the policy only
+# after the S3 store and Postgres are ready). To apply everything at once into the default namespace:
+#   kubectl apply -k config/samples/demo
+resources:
+  - s3.yaml
+  - postgres.yaml
+  - policy.yaml
