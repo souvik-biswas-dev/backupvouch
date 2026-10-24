@@ -217,7 +217,9 @@ Step 3. Upload: the latest zip. Implement scheduled backups.
   backoffLimit, activeDeadlineSeconds, owner reference). Unit-test the builder output.
 - cmd/runner with the `backup` subcommand: pg_dump (custom format) streamed to S3-compatible
   storage with github.com/minio/minio-go/v7, printing a small JSON result (object key, size,
-  sha256) to /dev/termination-log. No secrets in logs.
+  sha256) or the error form from docs/ARCHITECTURE.md to /dev/termination-log. If pg_dump exits
+  non-zero, the upload must be aborted, never completed. No secrets in logs.
+- cmd/runner `prune` subcommand (keep newest N, skip the protected key) and its Job builder.
 - Dockerfile.runner (postgres:16-alpine base plus the runner binary, non-root).
 - Do not wire the full controller yet.
 ~~~
@@ -237,7 +239,8 @@ Step 4. Upload: the latest zip. Implement verification.
 - A checks package: define how a check passes (the query must return a single boolean true,
   or a value that matches an expected value) and unit-test it.
 - internal/jobs: the verification Job builder (same hardening as the backup Job, plus a
-  NetworkPolicy suggestion in docs/SECURITY notes).
+  NetworkPolicy suggestion in docs/SECURITY notes). Use the fixed UID, emptyDir size limit and
+  pg_restore flags from docs/DECISIONS.md (D3, D15). Checks run in a read-only transaction.
 - Update docs/DECISIONS.md if you deviate from the plan.
 ~~~
 
@@ -256,6 +259,8 @@ Step 5. Upload: the latest zip. Wire everything into the reconciler.
 - Failure handling: Job failure, timeout, missing or invalid termination message, deleted
   Secret. Each ends in a clear condition and an Event.
 - Finalizer and cleanup of Jobs and temporary resources on delete, honouring retention.
+- The re-verify annotation, the SpecValid condition, the runner image allow-list, and early
+  SecretMissing detection, as described in docs/ARCHITECTURE.md and docs/DECISIONS.md.
 - Prometheus metrics registered with controller-runtime: last backup timestamp, last
   successful verification timestamp, verification success (0/1), restore duration seconds.
 - RBAC markers: the minimum set of verbs. Explain each in docs/SECURITY notes.
@@ -272,10 +277,10 @@ Step 6. Upload: the latest zip. Add the test layers described in docs/TESTING.md
   by hand and assert the state transitions, idempotency, and failure paths.
 - hack/e2e.sh: create a kind cluster, deploy MinIO and a seeded Postgres, build and load
   the operator and runner images, apply a BackupPolicy, wait for Verified=True. Then
-  SABOTAGE: corrupt the stored dump and confirm the next verification becomes Failed with
-  the right condition. Exit non-zero if either expectation is wrong.
-- .github/workflows/ci.yml (free for public repos): fmt, vet, unit and envtest tests, and
-  the e2e script using a kind action.
+  SABOTAGE: corrupt the stored dump, annotate the policy with backupvouch.dev/reverify, and
+  confirm the verification becomes Failed with the right condition. Exit non-zero if either expectation is wrong.
+- Adapt the scaffold's .github/workflows (lint.yml, test.yml, test-e2e.yml) instead of adding
+  a new ci.yml: fmt, vet, lint, unit and envtest tests, and the e2e script using a kind action.
 - Makefile targets: e2e and verify.
 - docs/TESTING.md describing all of the above.
 ~~~

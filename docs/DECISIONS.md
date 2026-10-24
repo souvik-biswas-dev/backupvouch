@@ -18,13 +18,15 @@ Short records of design choices. Add a new record when something changes.
 
 - **Context:** restoring needs a Postgres server. Options: a sidecar plus a Service, a separate Pod, or a process in the same container.
 - **Decision:** the verify subcommand starts a throwaway Postgres with `initdb` and `pg_ctl` as a non-root user, on an `emptyDir`.
-- **Consequences:** nothing listens on the network, cleanup is automatic when the Pod ends, and no extra resources can be left behind. Cost: the runner image contains Postgres server binaries and is larger.
+- **Consequences:** nothing listens on the network (Unix socket only), cleanup is automatic when the Pod ends, and no extra resources can be left behind. Cost: the runner image contains Postgres server binaries and is larger.
+- **Details (step 1 review):** `initdb` needs a UID that has a passwd entry, so the image fixes a non-root UID (70 on the Alpine Postgres image) and the Pod sets `runAsUser` and `fsGroup` to it. A read-only root filesystem is kept, with writable `emptyDir` mounts for the data directory, the socket directory and `/tmp`. The data `emptyDir` has a size limit (`verify.scratchSize`).
 
 ## D4: Results are returned through the container termination message
 
 - **Context:** the controller needs a structured result from a Job without extra infrastructure.
 - **Decision:** the runner writes a small JSON document to `/dev/termination-log`, and the controller reads it from the terminated container status.
 - **Consequences:** no extra storage or API needed, and the message size limit (4 KB) keeps results compact. If a result does not fit or is invalid, the run is marked failed with reason `InvalidRunnerResult`.
+- **Amended (step 1 review):** failures use the same channel (`{"error":{...}}`), but timeouts are read from the Job condition because a killed runner writes nothing. Messages are limited to 120 characters per check, at most 20 checks exist, and the runner trims to 3500 bytes. The Jobs use `terminationMessagePolicy: File` and no `ttlSecondsAfterFinished`. See `ARCHITECTURE.md`.
 
 ## D5: Deterministic Job names and owner references
 
@@ -36,22 +38,65 @@ Short records of design choices. Add a new record when something changes.
 
 - **Context:** the controller does not need credential values, only the runners do.
 - **Decision:** Jobs reference Secrets through `secretKeyRef` environment variables. The operator has no RBAC for Secrets.
-- **Consequences:** a compromised controller cannot read credentials, but a missing Secret is only discovered when the Job starts, and shows up as a failed run.
+- **Consequences:** a compromised controller cannot read credentials, but a missing Secret is only discovered when the Job starts. A Pod with a missing Secret does not fail, it waits in `CreateContainerConfigError`, so the controller reads that Pod state (it has `pods` read access) and fails the run early with reason `SecretMissing` after 60 seconds instead of waiting for the deadline.
 
 ## D7: Retention runs after verification and protects the newest verified backup
 
 - **Context:** deleting old backups before a new one is proven good could leave the team with nothing usable.
-- **Decision:** pruning happens only after a successful verification, and the newest verified backup is never deleted.
+- **Decision:** pruning happens only after a successful verification (or after a successful backup when verification is disabled, otherwise storage would grow forever), and the newest verified backup, named in `status.lastVerification.objectKey`, is never deleted. Pruning is done by a third Job (`runner prune`), because the controller never touches storage (see D12).
 - **Consequences:** storage may briefly hold more than `keepLast` objects when verification keeps failing, which is intended.
 
 ## D8: No admission webhook in v1
 
 - **Context:** a webhook gives early validation but adds certificates and operational weight.
-- **Decision:** validation is done with CRD schema markers only.
-- **Consequences:** cross-field rules (such as unique check names) are validated in the controller and reported in a condition. A webhook can be added later.
+- **Decision:** validation is done with CRD schema markers (including CEL rules and list-map keys) only.
+- **Consequences:** unique check names come from `listType=map` with `listMapKey=name`, and the name length limit from a CEL rule, so the API server enforces both. What the schema cannot check (cron semantics, time zone, runner image allow-list) is validated in the controller and reported in the `SpecValid` condition. A webhook can be added later.
 
 ## D9: Project name BackupVouch
 
-- **Context:** the working name `restoreguard` is already used by an existing backup auditing tool, and a similar name causes confusion in searches.
+- **Context:** the working name `restoreguard` appears to be used by an existing backup auditing tool (verify), and a similar name causes confusion in searches.
 - **Decision:** the project is called BackupVouch (`backupvouch` in code, repository, images, and metrics). To vouch is to give a trusted guarantee, which is what the operator does for each backup.
 - **Consequences:** the API group is `backup.backupvouch.dev` and metrics start with `backupvouch_`. Availability of the name on GitHub, pkg.go.dev, and Artifact Hub must be checked before the first release.
+
+## D10: One run at a time, one catch-up, no automatic retry of a failed run
+
+- **Context:** schedules can overlap a slow run, and a controller outage can span several schedules.
+- **Decision:** at most one run per policy is active, and a schedule that arrives meanwhile is skipped. After downtime only the most recent missed schedule runs. A failed run is not retried before the next schedule. `runID` always comes from the scheduled time.
+- **Consequences:** no pile-ups and no duplicate Jobs after a crash. A transient failure waits for the next schedule, unless the Job's own `backoffLimit` (1) retries it first.
+
+## D11: Failures travel through the termination message too
+
+- **Context:** the controller must tell `SourceUnreachable` from `StorageUnreachable` without reading Pod logs, and a Job that merely "failed" carries no reason.
+- **Decision:** the runner writes `{"error":{"reason":...,"message":...}}` on failure and a `reason` in the verify result. The controller trusts only reasons from a fixed list, and maps anything else to `BackupJobFailed` or `InvalidRunnerResult`.
+- **Consequences:** reasons are precise, but the runner must classify errors carefully (step 3 and 4).
+
+## D12: Retention is a third Job, `runner prune`
+
+- **Context:** the first draft said the controller never touches storage, yet retention has to delete objects.
+- **Decision:** a Prune Job (`<policy>-prune-<runID>`) lists objects under the prefix, keeps the newest `keepLast`, and skips the protected object.
+- **Consequences:** the controller keeps its "never touches storage" property. The storage credentials used by Jobs must be allowed to delete, so users should enable bucket versioning or object lock if they fear a compromised credential (see `SECURITY.md`).
+
+## D13: Manual re-verification by annotation
+
+- **Context:** the sabotage demo corrupts a stored dump. If the demo waited for the next scheduled run, a fresh good backup would be taken and nothing would fail. Re-checking old backups for bit rot is also useful.
+- **Decision:** the annotation `backupvouch.dev/reverify=<unix seconds>` makes an idle policy verify `status.lastBackup` again. The handled value is stored in `status.lastReverifyID`.
+- **Consequences:** a small API surface that is not part of the spec, and the demo can run in seconds. The alternative (a `spec` field such as `verify.recheckInterval`) is left for later.
+
+## D14: Runner images are allow-listed
+
+- **Context:** `runnerImage` plus `secretKeyRef` lets whoever creates a BackupPolicy run any image with any Secret of the namespace mounted, which is more power than creating a BackupPolicy suggests.
+- **Decision:** the operator takes a list of allowed runner image patterns (flag or environment variable). The default allows only the operator's own pinned default image. Other images give `SpecValid=False`, reason `RunnerImageNotAllowed`.
+- **Consequences:** safer by default; users who want a custom image must configure the operator.
+
+## D15: One Postgres major version per runner image
+
+- **Context:** `pg_dump` refuses to dump a server newer than itself, and a restore into an older server can fail.
+- **Decision:** the runner image bundles Postgres 16 tools and server. `pg_restore` runs with `--no-owner --no-privileges` so missing roles do not fail a restore. Sources newer than 16 are unsupported in v0.1; other versions need another runner image (built from the same Dockerfile with a build argument, to be decided in step 3).
+- **Consequences:** documented in the README limitations and the runbook. Extensions that are not in the image (for example PostGIS) make a restore fail with `RestoreFailed`.
+
+## D16: API type details that follow from Go and controller-gen
+
+- **Context:** writing `backuppolicy_types.go` (step 2) showed three places where a literal reading of `API.md` would not work.
+- **Decision:** (1) `verify.enabled` is a `*bool`, because with `omitempty` a plain `bool` set to false is dropped and the server default `true` would silently win. `scratchSize` is a `*resource.Quantity` for the same reason (a zero Quantity serialises as `"0"`). (2) `status.lastVerification.restoreDurationSeconds` is an `int64` of whole seconds, because controller-gen refuses floating-point fields unless `allowDangerousTypes` is set; the runner still reports a fractional value in its termination message and the controller rounds it. (3) `runID`, `currentRunID`, `lastRunID` and `lastReverifyID` are `int64` Unix timestamps. Optional structs (`retention`, `verify`) use `omitzero` and `default={}` so their inner defaults apply when they are omitted.
+- **Consequences:** `BackupPolicySpec.SetDefaults()` mirrors the schema defaults in Go, so the controller does not depend on server-side defaulting. Restore time resolution is one second.
+
