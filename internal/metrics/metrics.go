@@ -23,6 +23,11 @@ import (
 	backupv1alpha1 "github.com/souvik-biswas-dev/backupvouch/api/v1alpha1"
 )
 
+const (
+	labelNamespace = "namespace"
+	labelPolicy    = "policy"
+)
+
 var (
 	// LastBackupTimestampSeconds tracks the finish time of the last successful backup.
 	LastBackupTimestampSeconds = prometheus.NewGaugeVec(
@@ -30,7 +35,7 @@ var (
 			Name: "backupvouch_last_backup_timestamp_seconds",
 			Help: "Finish timestamp (Unix seconds) of the last successful backup.",
 		},
-		[]string{"namespace", "policy"},
+		[]string{labelNamespace, labelPolicy},
 	)
 
 	// LastVerifiedTimestampSeconds tracks the finish time of the last passed verification.
@@ -39,7 +44,7 @@ var (
 			Name: "backupvouch_last_verified_timestamp_seconds",
 			Help: "Finish timestamp (Unix seconds) of the last passed verification.",
 		},
-		[]string{"namespace", "policy"},
+		[]string{labelNamespace, labelPolicy},
 	)
 
 	// VerificationSuccess tracks the outcome of the last verification (1=passed, 0=failed).
@@ -48,7 +53,7 @@ var (
 			Name: "backupvouch_verification_success",
 			Help: "Result of the last verification (1=passed, 0=failed).",
 		},
-		[]string{"namespace", "policy"},
+		[]string{labelNamespace, labelPolicy},
 	)
 
 	// RestoreDurationSeconds tracks the measured duration of the last completed restore.
@@ -57,7 +62,7 @@ var (
 			Name: "backupvouch_restore_duration_seconds",
 			Help: "Measured duration in whole seconds of the last completed restore.",
 		},
-		[]string{"namespace", "policy"},
+		[]string{labelNamespace, labelPolicy},
 	)
 )
 
@@ -91,13 +96,14 @@ func UpdatePolicyMetrics(policy *backupv1alpha1.BackupPolicy) {
 	if policy.Status.LastVerification != nil {
 		lv := policy.Status.LastVerification
 
-		if lv.Result == backupv1alpha1.VerificationPassed {
+		switch lv.Result {
+		case backupv1alpha1.VerificationPassed:
 			VerificationSuccess.WithLabelValues(ns, name).Set(1)
 			if lv.Time != nil {
 				ts := float64(lv.Time.Unix())
 				LastVerifiedTimestampSeconds.WithLabelValues(ns, name).Set(ts)
 			}
-		} else if lv.Result == backupv1alpha1.VerificationFailed {
+		case backupv1alpha1.VerificationFailed:
 			VerificationSuccess.WithLabelValues(ns, name).Set(0)
 		}
 
