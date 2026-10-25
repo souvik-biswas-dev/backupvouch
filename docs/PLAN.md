@@ -65,7 +65,7 @@ Hard constraints
 - Zero cost: kind cluster locally, an in-cluster S3 store (SeaweedFS since step 7a, MinIO images are gone) as S3 storage, no cloud accounts,
   no paid APIs.
 - Keep the kubebuilder scaffold layout (api/, internal/controller/, cmd/, config/).
-- CRD: group backup.backupvouch.dev, version v1alpha1, kind BackupPolicy.
+- CRD: group backup.backupvouch.pages.dev, version v1alpha1, kind BackupPolicy.
 - Security basics: credentials only via Kubernetes Secrets and never logged, least-privilege
   RBAC, non-root containers, pinned image tags (no :latest).
 
@@ -126,7 +126,7 @@ Claude can't run kubebuilder in its sandbox, so you create the scaffold. Prerequ
 
     mkdir backupvouch && cd backupvouch
     git init
-    kubebuilder init --domain backupvouch.dev --repo github.com/souvik-biswas-dev/backupvouch
+    kubebuilder init --domain backupvouch.pages.dev --repo github.com/souvik-biswas-dev/backupvouch
     kubebuilder create api --group backup --version v1alpha1 --kind BackupPolicy --resource --controller
     make manifests generate
     go build ./...
@@ -302,7 +302,7 @@ Step 5. Upload: the latest zip. Wire everything into the reconciler.
 
 ## Step 6: tests and CI [WRITTEN, run it locally]
 
-Done in step 6 (see `docs/TESTING.md`): failure-path and idempotency envtest specs (`internal/controller/backuppolicy_failures_test.go`, next to the happy-path spec from step 5), `hack/e2e.sh` with fixtures in `hack/e2e/` (kind, MinIO, seeded Postgres, healthy case, then the sabotage check with `backupvouch.dev/reverify`), Makefile targets `verify`, `e2e` and `docker-build-runner`, the three workflows adapted (`test.yml` runs `make verify` and checks for uncommitted generated files, `test-e2e.yml` runs `make e2e`), the scaffold Ginkgo e2e removed (D17), the events RBAC group and Job deletion fixes (D18).
+Done in step 6 (see `docs/TESTING.md`): failure-path and idempotency envtest specs (`internal/controller/backuppolicy_failures_test.go`, next to the happy-path spec from step 5), `hack/e2e.sh` with fixtures in `hack/e2e/` (kind, MinIO, seeded Postgres, healthy case, then the sabotage check with `backupvouch.pages.dev/reverify`), Makefile targets `verify`, `e2e` and `docker-build-runner`, the three workflows adapted (`test.yml` runs `make verify` and checks for uncommitted generated files, `test-e2e.yml` runs `make e2e`), the scaffold Ginkgo e2e removed (D17), the events RBAC group and Job deletion fixes (D18).
 
 If something fails locally, use the Fix prompt with the output of `make verify` or `make e2e`. The original prompt, kept for reference:
 
@@ -313,7 +313,7 @@ Step 6. Upload: the latest zip. Add the test layers described in docs/TESTING.md
   by hand and assert the state transitions, idempotency, and failure paths.
 - hack/e2e.sh: create a kind cluster, deploy MinIO and a seeded Postgres, build and load
   the operator and runner images, apply a BackupPolicy, wait for Verified=True. Then
-  SABOTAGE: corrupt the stored dump, annotate the policy with backupvouch.dev/reverify, and
+  SABOTAGE: corrupt the stored dump, annotate the policy with backupvouch.pages.dev/reverify, and
   confirm the verification becomes Failed with the right condition. Exit non-zero if either expectation is wrong.
 - Adapt the scaffold's .github/workflows (lint.yml, test.yml, test-e2e.yml) instead of adding
   a new ci.yml: fmt, vet, lint, unit and envtest tests, and the e2e script using a kind action.

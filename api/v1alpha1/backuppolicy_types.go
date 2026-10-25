@@ -357,7 +357,7 @@ type BackupPolicyStatus struct {
 	// +optional
 	LastRunID int64 `json:"lastRunID,omitempty"`
 
-	// lastReverifyID is the last value of the backupvouch.dev/reverify
+	// lastReverifyID is the last value of the backupvouch.pages.dev/reverify
 	// annotation that was acted on.
 	// +optional
 	LastReverifyID int64 `json:"lastReverifyID,omitempty"`

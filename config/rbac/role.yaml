@@ -13,7 +13,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - backup.backupvouch.dev
+  - backup.backupvouch.pages.dev
   resources:
   - backuppolicies
   verbs:
@@ -23,13 +23,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - backup.backupvouch.dev
+  - backup.backupvouch.pages.dev
   resources:
   - backuppolicies/finalizers
   verbs:
   - update
 - apiGroups:
-  - backup.backupvouch.dev
+  - backup.backupvouch.pages.dev
   resources:
   - backuppolicies/status
   verbs:

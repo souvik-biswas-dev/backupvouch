@@ -6,7 +6,7 @@ First look:
 
     kubectl get backuppolicies
     kubectl describe backuppolicy <name>      # conditions and events
-    kubectl get jobs -l backupvouch.dev/policy=<name>
+    kubectl get jobs -l backupvouch.pages.dev/policy=<name>
 
 ## Alerts (examples)
 
@@ -28,7 +28,7 @@ Three places hold the reason, from short to long:
 
 1. `kubectl get backuppolicies` shows only `VERIFIED` (True, False or Unknown).
 2. `status.lastVerification` has the detail: `failedChecks` names each failing check, and `message` says why. With failed checks, `message` holds their messages. Without any (for example `ChecksumMismatch`, where nothing was restored), `message` is a fixed text for the reason. The same text is in the `VerificationFailed` event (`kubectl describe backuppolicy <name>`).
-3. The Pod logs of the verify Job (`kubectl logs -l backupvouch.dev/role=verify`) have the full output. The runner keeps messages short and free of row data, so go to the logs for the rest.
+3. The Pod logs of the verify Job (`kubectl logs -l backupvouch.pages.dev/role=verify`) have the full output. The runner keeps messages short and free of row data, so go to the logs for the rest.
 
 `Restore took: Not recorded` in the dashboard is normal for a checksum failure: no restore happened.
 
@@ -61,7 +61,7 @@ Three places hold the reason, from short to long:
 
 ## Re-checking the newest backup
 
-    kubectl annotate backuppolicy <name> backupvouch.dev/reverify="$(date +%s)" --overwrite
+    kubectl annotate backuppolicy <name> backupvouch.pages.dev/reverify="$(date +%s)" --overwrite
 
 ## A real restore
 
@@ -69,7 +69,7 @@ BackupVouch verifies backups but never restores into production. To restore, dow
 
 ## Pausing
 
-Set `spec.suspend: true` to stop new work. A run in progress finishes. While a policy is suspended and idle it also ignores the `backupvouch.dev/reverify` annotation: set `suspend` back to `false` to re-check a backup.
+Set `spec.suspend: true` to stop new work. A run in progress finishes. While a policy is suspended and idle it also ignores the `backupvouch.pages.dev/reverify` annotation: set `suspend` back to `false` to re-check a backup.
 
 ## A Job was deleted by hand
 

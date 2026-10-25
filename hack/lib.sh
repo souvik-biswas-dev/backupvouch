@@ -220,7 +220,7 @@ stage_operator() {
   k -n "${OP_NS}" patch deployment "${OP_DEPLOY}" --type=json \
     -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--metrics-secure=false"}]'
   k -n "${OP_NS}" rollout status "deployment/${OP_DEPLOY}" --timeout=180s
-  k wait --for=condition=Established crd/backuppolicies.backup.backupvouch.dev --timeout=60s
+  k wait --for=condition=Established crd/backuppolicies.backup.backupvouch.pages.dev --timeout=60s
 }
 
 stage_fixtures() {
@@ -273,11 +273,11 @@ stage_sabotage() {
     --data-binary "this is not a postgres dump")"
   [[ "${CORRUPT_CODE}" == "200" ]] || fail "overwriting the stored dump returned HTTP '${CORRUPT_CODE}', expected 200"
 
-  say "We ask BackupVouch to check the stored backup again (annotation backupvouch.dev/reverify). A scheduled run would take a fresh good backup, so it would not show the problem."
+  say "We ask BackupVouch to check the stored backup again (annotation backupvouch.pages.dev/reverify). A scheduled run would take a fresh good backup, so it would not show the problem."
   # A scheduled run would take a fresh good backup, so ask for a re-check of the stored one (D13).
   REVERIFY_ID="$(date +%s)"
-  show_cmd "kubectl annotate backuppolicy ${POLICY} backupvouch.dev/reverify=${REVERIFY_ID}"
-  k -n "${NS}" annotate backuppolicy "${POLICY}" "backupvouch.dev/reverify=${REVERIFY_ID}" --overwrite
+  show_cmd "kubectl annotate backuppolicy ${POLICY} backupvouch.pages.dev/reverify=${REVERIFY_ID}"
+  k -n "${NS}" annotate backuppolicy "${POLICY}" "backupvouch.pages.dev/reverify=${REVERIFY_ID}" --overwrite
   poll "controller acted on the annotation" 120 field_is ".status.lastReverifyID" "${REVERIFY_ID}"
 
   poll "RestoreVerified=False" 600 verification_failed

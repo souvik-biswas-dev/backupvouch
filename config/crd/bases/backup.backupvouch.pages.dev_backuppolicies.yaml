@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: backuppolicies.backup.backupvouch.dev
+  name: backuppolicies.backup.backupvouch.pages.dev
 spec:
-  group: backup.backupvouch.dev
+  group: backup.backupvouch.pages.dev
   names:
     kind: BackupPolicy
     listKind: BackupPolicyList
@@ -455,7 +455,7 @@ spec:
                 type: object
               lastReverifyID:
                 description: |-
-                  lastReverifyID is the last value of the backupvouch.dev/reverify
+                  lastReverifyID is the last value of the backupvouch.pages.dev/reverify
                   annotation that was acted on.
                 format: int64
                 type: integer

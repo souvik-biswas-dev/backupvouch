@@ -49,7 +49,7 @@ The scaffold also generates `backuppolicy_admin_role`, `backuppolicy_editor_role
 
 ### Recommended NetworkPolicy for Verification Jobs
 
-Verification Jobs (`backupvouch.dev/role: verify`) only need egress to Kubernetes DNS and the S3 storage endpoint; they never connect to the source database:
+Verification Jobs (`backupvouch.pages.dev/role: verify`) only need egress to Kubernetes DNS and the S3 storage endpoint; they never connect to the source database:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -60,7 +60,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      backupvouch.dev/role: verify
+      backupvouch.pages.dev/role: verify
   policyTypes:
     - Egress
   egress:

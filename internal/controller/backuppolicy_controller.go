@@ -52,9 +52,9 @@ type BackupPolicyReconciler struct {
 	NowFunc                    func() time.Time
 }
 
-// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=backup.backupvouch.dev,resources=backuppolicies/finalizers,verbs=update
+// +kubebuilder:rbac:groups=backup.backupvouch.pages.dev,resources=backuppolicies,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=backup.backupvouch.pages.dev,resources=backuppolicies/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=backup.backupvouch.pages.dev,resources=backuppolicies/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // VERIFY: the recorder comes from mgr.GetEventRecorder (events.k8s.io API), so the rule is for events.k8s.io, not core events.

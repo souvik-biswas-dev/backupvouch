@@ -4,7 +4,7 @@ Guidance for AI coding assistants (and humans) working in this repository. Read 
 
 ## Project
 
-BackupVouch is a Go Kubernetes operator (kubebuilder v4) with one CRD: `BackupPolicy` (`backup.backupvouch.dev/v1alpha1`). It runs PostgreSQL backups as Jobs, verifies each one by restoring it into a scratch Postgres, and reports the result. See `docs/SPEC.md` and `docs/ARCHITECTURE.md`.
+BackupVouch is a Go Kubernetes operator (kubebuilder v4) with one CRD: `BackupPolicy` (`backup.backupvouch.pages.dev/v1alpha1`). It runs PostgreSQL backups as Jobs, verifies each one by restoring it into a scratch Postgres, and reports the result. See `docs/SPEC.md` and `docs/ARCHITECTURE.md`.
 
 ## Rules
 
