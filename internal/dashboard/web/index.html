@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>BackupVouch</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/app.css">
+<script type="module" src="/js/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the policies</a>
+<header class="top">
+  <img class="lockup" src="/logo.svg" alt="BackupVouch" width="167" height="30">
+  <p class="stamp" id="stamp">Loading status…</p>
+</header>
+<main id="main">
+  <h1 id="headline">Checking your backups…</h1>
+  <p class="subline" id="subline"></p>
+  <p class="notice" id="notice" role="status"></p>
+  <div id="policies"></div>
+</main>
+<noscript>
+  <p class="plain">This page needs JavaScript to draw the status. The same data is available as JSON at <code>/api/v1/policies</code>.</p>
+</noscript>
+</body>
+</html>

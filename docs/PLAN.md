@@ -15,8 +15,8 @@ BackupVouch (written `backupvouch` in the repo, Go module, images, API group and
 | 5 | controller | done (envtest happy path included) |
 | 6 | tests and CI | written, **not run yet**: run `make verify` and `make e2e` locally first |
 | 6b | close the gaps found in the step 6 audit | next (small, optional before step 7) |
-| 7 | packaging and demo | not started |
-| 8 | optional dashboard | not started |
+| 7 | packaging and demo | done |
+| 8 | optional dashboard | written, not run |
 | 9 | final docs and polish | not started |
 
 `docs/CONTEXT.md` has the details: what exists, where the code still differs from `docs/API.md` and `docs/ARCHITECTURE.md`, and what to verify locally. Steps marked done keep their prompts below as a record; do not re-run them.

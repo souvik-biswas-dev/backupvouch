@@ -38,6 +38,7 @@ import (
 
 	backupv1alpha1 "github.com/souvik-biswas-dev/backupvouch/api/v1alpha1"
 	"github.com/souvik-biswas-dev/backupvouch/internal/controller"
+	"github.com/souvik-biswas-dev/backupvouch/internal/dashboard"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -87,6 +88,14 @@ func main() {
 		"allowed-runner-images",
 		"",
 		"Comma-separated list of allowed runner image patterns (D14).",
+	)
+	var dashboardAddr string
+	flag.StringVar(
+		&dashboardAddr,
+		"dashboard-bind-address",
+		"0",
+		"The address the read-only status dashboard binds to, for example 127.0.0.1:9090. "+
+			"Use 0 to disable it (D21).",
 	)
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
@@ -208,6 +217,13 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+
+	if dashboardAddr != "" && dashboardAddr != "0" {
+		if err := mgr.Add(&dashboard.Server{Reader: mgr.GetClient(), Addr: dashboardAddr}); err != nil {
+			setupLog.Error(err, "Failed to add the dashboard")
+			os.Exit(1)
+		}
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "Failed to set up health check")

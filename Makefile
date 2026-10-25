@@ -81,7 +81,6 @@ RUNNER_IMG ?= $(shell sed -n 's/.*DefaultRunnerImage = "\(.*\)"/\1/p' internal/j
 .PHONY: e2e
 e2e: ## Run hack/e2e.sh: backup, verify, then sabotage and expect a failed verification.
 	KIND=$(KIND) E2E_CLUSTER=$(KIND_CLUSTER) bash hack/e2e.sh
-<<<<<<< HEAD
 
 # The narrated demo (hack/demo.sh): same steps as e2e, with commentary, status and events after each stage.
 # The kind cluster is kept afterwards (DEMO_KEEP_CLUSTER=false deletes it). Needs docker, kind and kubectl.
@@ -99,8 +98,35 @@ demo-clean: ## Delete the demo kind cluster.
 demo-transcript: ## Run the demo and save the real output to dist/demo-transcript.txt (for docs/TESTING.md).
 	mkdir -p dist
 	KIND=$(KIND) DEMO_CLUSTER=$(DEMO_CLUSTER) bash -o pipefail -c 'bash hack/demo.sh 2>&1 | tee dist/demo-transcript.txt'
-=======
->>>>>>> origin/main
+
+# Read-only status dashboard (step 8, docs/DESIGN.md). It is off unless the operator gets
+# --dashboard-bind-address. `make dashboard-enable` turns it on in a deployed operator and
+# `make dashboard` opens a port-forward to it. Variables: DASHBOARD_PORT, DASHBOARD_NS, DASHBOARD_DEPLOY.
+DASHBOARD_PORT ?= 9090
+DASHBOARD_NS ?= backupvouch-system
+DASHBOARD_DEPLOY ?= backupvouch-controller-manager
+
+.PHONY: dashboard-fonts
+dashboard-fonts: ## Download the IBM Plex woff2 fonts into internal/dashboard/web/fonts (needs npm; commit the result).
+	bash hack/dashboard-fonts.sh
+
+.PHONY: dashboard-assets
+dashboard-assets: ## Copy the favicon and logo from assets/brand into the embedded dashboard files.
+	cp assets/brand/favicon.svg assets/brand/favicon.ico assets/brand/apple-touch-icon.png assets/brand/logo.svg internal/dashboard/web/
+
+.PHONY: dashboard-js-test
+dashboard-js-test: ## Run the dashboard's JavaScript unit tests (needs node 22 or newer).
+	TZ=UTC node --test internal/dashboard/jstest/*.test.mjs
+
+.PHONY: dashboard-enable
+dashboard-enable: ## Turn the dashboard on in the deployed operator (listens on 127.0.0.1 inside the Pod only).
+	"$(KUBECTL)" -n $(DASHBOARD_NS) patch deployment $(DASHBOARD_DEPLOY) --type=json \
+		-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--dashboard-bind-address=127.0.0.1:$(DASHBOARD_PORT)"}]'
+	"$(KUBECTL)" -n $(DASHBOARD_NS) rollout status deployment $(DASHBOARD_DEPLOY)
+
+.PHONY: dashboard
+dashboard: ## Port-forward the dashboard to http://localhost:9090 (Ctrl-C to stop).
+	"$(KUBECTL)" -n $(DASHBOARD_NS) port-forward deployment/$(DASHBOARD_DEPLOY) $(DASHBOARD_PORT):$(DASHBOARD_PORT)
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

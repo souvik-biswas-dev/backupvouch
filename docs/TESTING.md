@@ -1,10 +1,6 @@
 # TESTING
 
-<<<<<<< HEAD
 Status: step 7. Unit and envtest layers pass locally (see CONTEXT.md for the last numbers). `hack/e2e.sh`, `hack/demo.sh` and the CI workflows were written without a cluster in reach; the first real runs may need small fixes (see CONTEXT.md).
-=======
-Status: step 6. Unit and envtest layers pass locally (see CONTEXT.md for the last numbers). `hack/e2e.sh` and the CI workflows are written but have not been run yet.
->>>>>>> origin/main
 
 ## Layers
 
@@ -12,11 +8,7 @@ Status: step 6. Unit and envtest layers pass locally (see CONTEXT.md for the las
 |---|---|---|---|
 | Unit | cron scheduling, defaulting and validation helpers, Job builders, check evaluation | Go tests, table-driven | next to the code |
 | Controller | state transitions, idempotency, failure paths | envtest (real API server and etcd, no kubelet) | `internal/controller/` |
-<<<<<<< HEAD
 | End-to-end | the whole story in a real cluster, including sabotage | kind, SeaweedFS (S3), seeded Postgres, a bash script | `hack/e2e.sh` (steps in `hack/lib.sh`), fixtures in `config/samples/demo/` |
-=======
-| End-to-end | the whole story in a real cluster, including sabotage | kind, MinIO, seeded Postgres, a bash script | `hack/e2e.sh`, fixtures in `hack/e2e/` |
->>>>>>> origin/main
 
 envtest does not run Jobs, so controller tests set Job and Pod status by hand and assert what the controller does next. Recent Kubernetes versions validate Job status strictly (for example a completed Job needs a completion time and matching conditions), so the test helper must build a consistent status; check this against the Kubernetes version of the scaffold. The helpers `markJobComplete` and `markJobFailed` in the controller tests build a consistent status; if a Kubernetes upgrade rejects it, fix the helpers (VERIFY on a new envtest version).
 
@@ -58,7 +50,6 @@ The point of the project: show that a bad backup is caught.
 
 1. Reads the default runner image from `internal/jobs/backup.go`, builds the operator image (`make docker-build`) and the runner image (`make docker-build-runner`) under the tag the operator uses by default, creates a kind cluster (`backupvouch-e2e`) and loads both images.
 2. Deploys the operator with `make deploy` and switches its metrics endpoint to plain HTTP so the script can read it through the API server's pod proxy. The default install stays on HTTPS. `config/manager/kustomization.yaml` is restored when the script ends.
-<<<<<<< HEAD
 3. Deploys SeaweedFS as the S3 store (it creates the bucket at start, and the script then makes one signed request to prove the credentials work) and a Postgres 16 with a `users` table of three rows (`config/samples/demo/`), then applies `config/samples/demo/policy.yaml`.
 4. **Healthy case.** Waits for `RestoreVerified=True`, then checks `lastVerification.result=Passed`, a stored object key and checksum, the run returning to `Idle`, the metric `backupvouch_verification_success 1` and a `VerificationPassed` event. If the backup or the verification fails here, the script stops at once and prints the reason.
 5. **Sabotage.** Overwrites the stored dump with text with a signed S3 `PUT` from a one-off `curlimages/curl` Pod, annotates the policy with `backupvouch.dev/reverify=<unix seconds>`, waits for `RestoreVerified=False`, and checks reason `ChecksumMismatch`, `lastVerification.result=Failed` for the same object, `BackupReady` still `True`, a `VerificationFailed` event and the metric at 0.
@@ -78,26 +69,13 @@ If the corruption step fails on your machine, do it by hand while the cluster is
 `hack/demo.sh` runs the same stages as the e2e test in its own kind cluster (`backupvouch-demo`) and narrates them. It prints the policy it applies, and after each result the `kubectl get backuppolicy` line, the status block (conditions, last backup, last verification, history) and the events. Result 1 is `RestoreVerified=True` after a real backup and restore. Result 2 is the same policy after the stored dump was overwritten with garbage and a re-verification was requested: `RestoreVerified=False`, reason `ChecksumMismatch`, a `VerificationFailed` event, while `BackupReady` is still `True`.
 
 Differences from `make e2e`: the cluster is kept afterwards (`DEMO_KEEP_CLUSTER=false` deletes it), an old demo cluster is deleted first, and `DEMO_PAUSE=true` waits for Enter after each stage when presenting. Needs docker, kind and kubectl, like the e2e test. The images are built locally and loaded into kind, so nothing is pulled from ghcr.io.
-=======
-3. Deploys MinIO (the bucket is a directory created at start) and a Postgres 16 with a `users` table of three rows (`hack/e2e/`), then applies `hack/e2e/policy.yaml`.
-4. **Healthy case.** Waits for `RestoreVerified=True`, then checks `lastVerification.result=Passed`, a stored object key and checksum, the run returning to `Idle`, the metric `backupvouch_verification_success 1` and a `VerificationPassed` event. If the backup or the verification fails here, the script stops at once and prints the reason.
-5. **Sabotage.** Overwrites the stored dump with text through a one-off `minio/mc` Pod, annotates the policy with `backupvouch.dev/reverify=<unix seconds>`, waits for `RestoreVerified=False`, and checks reason `ChecksumMismatch`, `lastVerification.result=Failed` for the same object, `BackupReady` still `True`, a `VerificationFailed` event and the metric at 0.
-6. Exit code 0 only if every check holds. On any failure it prints the policy YAML, Jobs, Pods, recent events, the operator log and the runner logs, then deletes the cluster (unless `E2E_KEEP_CLUSTER=true`, or the cluster already existed).
-
-Variables: `E2E_CLUSTER`, `E2E_KEEP_CLUSTER`, `CONTROLLER_IMG`, `MC_IMG`, `KIND`. Debugging a failure: `E2E_KEEP_CLUSTER=true make e2e`, then use `kubectl --context kind-backupvouch-e2e`.
-
-If the corruption step fails on your machine (`kubectl run` with a piped stdin is the least certain part), do it by hand while the cluster is kept: `kubectl run mc --rm -it --restart=Never --image=minio/mc:RELEASE.2025-04-16T18-13-26Z --env=MC_HOST_local=http://e2eaccesskey:e2esecretkey123@minio.default.svc:9000 --command -- sh -c 'echo garbage | mc pipe local/backups/<objectKey>'`.
->>>>>>> origin/main
 
 ## Running tests
 
     make verify      # = make manifests generate fmt vet test (unit and envtest)
     make lint        # golangci-lint
     make e2e         # kind end-to-end, needs docker, kind and kubectl (about 5 to 10 minutes)
-<<<<<<< HEAD
     make demo        # the narrated version of the e2e story, keeps its cluster
-=======
->>>>>>> origin/main
 
 The scaffold's Ginkgo e2e suite (`test/e2e`, `test/utils`) was removed in step 6, see D17.
 
@@ -110,10 +88,7 @@ GitHub Actions, free for public repositories, on every push and pull request:
 | `lint.yml` | `make lint-config`, `make lint` |
 | `test.yml` | `make verify` (generate, fmt, vet, unit and envtest tests), then `git diff --exit-code` so generated code, CRDs, RBAC and formatting must be committed |
 | `test-e2e.yml` | installs a pinned kind, then `make e2e` (30 minute limit) |
-<<<<<<< HEAD
 | `publish-images.yml` | on a `vX.Y.Z` tag (or by hand, without pushing): builds the operator and runner images and pushes them to ghcr.io. The tag must equal the tag of `DefaultRunnerImage` |
-=======
->>>>>>> origin/main
 
 `go mod tidy` is no longer run in CI (the scaffold ran it before the tests, which hides a go.mod that needs tidying). Run `go mod tidy` yourself when you change dependencies.
 
@@ -124,3 +99,8 @@ GitHub Actions, free for public repositories, on every push and pull request:
     make demo-transcript      # runs the demo, saves the output to dist/demo-transcript.txt
 
 Then paste the interesting parts here (the image build lines can be cut): the applied policy, the output of "Result 1" and "Result 2", and the final `DEMO FINISHED` line. Do not edit the output. If a run fails, paste it into a new chat with the Fix prompt instead.
+
+## Dashboard tests (step 8)
+
+- `go test ./internal/dashboard/...`: verdict and run-state tables, ordering, next run, no connection details in the JSON, read-only methods, headers, no directory listing, error without detail, and file checks (brand copies identical, no remote URLs, no inline code, no `innerHTML`, referenced fonts present).
+- `make dashboard-js-test`: node tests for the scale, formatting and headline text. Not covered: drawing; look at it in a browser.

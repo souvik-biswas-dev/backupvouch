@@ -86,3 +86,13 @@ Delete the BackupPolicies first, while the operator is still running. Each polic
     kubectl delete -f dist/install.yaml
 
 Deleting the CRD deletes every remaining BackupPolicy. Backups already stored in the bucket are never deleted by uninstalling.
+
+## Status dashboard (optional)
+
+A read-only page showing each policy's verdict and run history. It is off by default.
+
+    make dashboard-fonts      # once, needs npm; commit internal/dashboard/web/fonts
+    make dashboard-enable     # adds --dashboard-bind-address=127.0.0.1:9090 to the deployed operator
+    make dashboard            # port-forward, then open http://localhost:9090
+
+The page listens on the loopback address inside the Pod, so only `kubectl port-forward` reaches it. The same data is JSON at `/api/v1/policies`. Do not expose it with a Service or Ingress without an authenticating proxy (SECURITY.md). Redeploying the operator removes the flag; to keep it, add it to `config/manager/manager.yaml`.

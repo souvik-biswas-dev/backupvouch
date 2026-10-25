@@ -84,3 +84,7 @@ spec:
         - protocol: TCP
           port: 8333
 ```
+
+## Status dashboard
+
+Off by default (`--dashboard-bind-address`, D21). When on, it is unauthenticated and read-only: GET and HEAD only, no writes, no new RBAC (it reads BackupPolicies through the existing cache). It shows policy names, namespaces, schedules, backup object keys, sizes, checksums and failure messages; it never shows hosts, buckets or Secret names. The recommended setup binds `127.0.0.1` and uses `kubectl port-forward`. A strict Content-Security-Policy allows only same-origin files, there is no inline script, and the page builds the DOM with text nodes only (a test forbids `innerHTML`). Anyone who can reach a non-loopback listener can read the status, so put it behind an authenticating proxy if you expose it.

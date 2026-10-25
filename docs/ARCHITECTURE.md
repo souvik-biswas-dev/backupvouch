@@ -162,3 +162,7 @@ Size and content rules for the runner:
 ## Recommended NetworkPolicy for Jobs
 
 Allow egress only to DNS and to the storage endpoint, plus egress to the source database for backup Jobs. Verification and prune Jobs need no database access. Select Jobs with the label `backupvouch.dev/role`.
+
+## Dashboard
+
+`internal/dashboard` is a manager Runnable (no leader election) that serves `/api/v1/policies` and the embedded page on `--dashboard-bind-address`. `BuildResponse` turns BackupPolicies into the JSON: a verdict per policy (`vouched` only if the verification belongs to the newest backup), a state per history entry, and the next scheduled run. Design in `docs/DESIGN.md`.

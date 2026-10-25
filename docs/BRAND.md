@@ -19,7 +19,7 @@ Why this and not the alternatives: a notary seal says "official" but not "restor
 | Archive Mist | `#C9D3DE` | the back layer on light backgrounds |
 | Paper | `#F5F7FA` | light background |
 
-On dark backgrounds the layers become `#E8EEF4` (text), `#35C2B5`, `#5B6E83` and `#34465A`. Measured contrast (WCAG): Ledger Ink on Paper 15.2:1, Vouch Teal on Paper 4.7:1, Vouch Teal Bright on Ledger Ink 7.4:1. The Slate and Mist layers are decorative (1.4 to 3.8:1) and must never carry text. Status colours for a future dashboard (failed, warning) are not part of the mark and are defined in step 8; the brand must not contradict them, and failure must never rely on colour alone.
+On dark backgrounds the layers become `#E8EEF4` (text), `#35C2B5`, `#5B6E83` and `#34465A`. Measured contrast (WCAG): Ledger Ink on Paper 15.2:1, Vouch Teal on Paper 4.7:1, Vouch Teal Bright on Ledger Ink 7.4:1. The Slate and Mist layers are decorative (1.4 to 3.8:1) and must never carry text. The dashboard (step 8) adds one status colour, Fracture `#A82217`, defined in `docs/DESIGN.md`; there is no warning colour. The brand must not contradict it, and failure must never rely on colour alone.
 
 ## Typeface
 
