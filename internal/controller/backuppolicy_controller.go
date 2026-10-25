@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -83,6 +82,10 @@ func (r *BackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 	}
+
+	// Recompute the gauges from status on every reconcile, so they come back after an operator restart
+	// (docs/ARCHITECTURE.md rule 6).
+	metrics.UpdatePolicyMetrics(&policy)
 
 	// 2. Validate Spec (SpecValid condition)
 	valRes := validation.ValidateSpec(&policy, r.AllowedRunnerImagePatterns, r.DefaultRunnerImage)
@@ -323,7 +326,7 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 	var job batchv1.Job
 	if err := r.Get(ctx, client.ObjectKey{Namespace: policy.Namespace, Name: jobName}, &job); err != nil {
 		if errors.IsNotFound(err) {
-			return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+			return r.recreateVerifyJob(ctx, policy)
 		}
 		return ctrl.Result{}, err
 	}
@@ -336,6 +339,7 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 			backupv1alpha1.ReasonSecretMissing,
 			"Secret referenced by verify job is missing or invalid",
 			nil,
+			0,
 			&job,
 		)
 	}
@@ -358,6 +362,7 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 			backupv1alpha1.ReasonVerificationTimeout,
 			"verification job exceeded activeDeadlineSeconds",
 			nil,
+			0,
 			nil,
 		)
 	}
@@ -369,7 +374,7 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 		if !success && inspection.OOMKilled {
 			msg = "verify container was OOMKilled"
 		}
-		return r.failVerify(ctx, policy, reason, msg, nil, nil)
+		return r.failVerify(ctx, policy, reason, msg, nil, 0, nil)
 	}
 
 	if parsed.Result == backupv1alpha1.VerificationPassed {
@@ -377,7 +382,7 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 			Time:                   &nowMeta,
 			Result:                 backupv1alpha1.VerificationPassed,
 			ObjectKey:              objectKey,
-			RestoreDurationSeconds: int64(math.Round(parsed.RestoreDurationSeconds)),
+			RestoreDurationSeconds: wholeSeconds(parsed.RestoreDurationSeconds),
 			FailedChecks:           nil,
 			Message:                "",
 		}
@@ -395,26 +400,48 @@ func (r *BackupPolicyReconciler) reconcileVerifying(
 		return ctrl.Result{RequeueAfter: time.Millisecond}, r.Status().Update(ctx, policy)
 	}
 
-	// Verification failed
-	var failedCheckNames []string
-	for _, c := range parsed.Checks {
-		if !c.Passed {
-			failedCheckNames = append(failedCheckNames, c.Name)
-		}
-	}
-
+	// Verification failed. Only reasons from the fixed list are trusted (D11); anything else counts as RestoreFailed.
 	reason := parsed.Reason
-	if reason == "" {
+	if !isValidVerifyFailureReason(reason) {
 		reason = backupv1alpha1.ReasonRestoreFailed
 	}
 	return r.failVerify(
 		ctx,
 		policy,
 		reason,
-		"one or more checks or restore operations failed",
-		failedCheckNames,
+		verifyFailureMessage(reason, parsed.Checks),
+		failedCheckNames(parsed.Checks),
+		wholeSeconds(parsed.RestoreDurationSeconds),
 		nil,
 	)
+}
+
+// recreateVerifyJob rebuilds a verify Job that is missing, from the backup recorded in status. This is how the
+// controller resumes after the Job was deleted or the operator crashed (docs/ARCHITECTURE.md rules 4 and 6).
+func (r *BackupPolicyReconciler) recreateVerifyJob(
+	ctx context.Context,
+	policy *backupv1alpha1.BackupPolicy,
+) (ctrl.Result, error) {
+	lb := policy.Status.LastBackup
+	if lb == nil || lb.Result != backupv1alpha1.BackupSucceeded || lb.ObjectKey == "" {
+		return r.failVerify(
+			ctx,
+			policy,
+			backupv1alpha1.ReasonInvalidRunnerResult,
+			"no successful backup is recorded, so there is nothing to verify",
+			nil,
+			0,
+			nil,
+		)
+	}
+	vJob, err := jobs.BuildVerifyJob(policy, policy.Status.CurrentRunID, lb.ObjectKey, lb.SHA256)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to rebuild verify job: %w", err)
+	}
+	if err := r.Create(ctx, vJob); client.IgnoreAlreadyExists(err) != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to recreate verify job: %w", err)
+	}
+	return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 }
 
 func (r *BackupPolicyReconciler) reconcilePruning(
@@ -522,6 +549,8 @@ func (r *BackupPolicyReconciler) failBackup(
 	metrics.UpdatePolicyMetrics(policy)
 
 	r.recordHistory(policy)
+	// Keep only the Jobs of the last 3 runs here too, otherwise Jobs of failed runs pile up (rule 8).
+	_ = r.cleanupOldJobs(ctx, policy)
 	policy.Status.Phase = backupv1alpha1.PhaseIdle
 	policy.Status.CurrentRunID = 0
 
@@ -533,6 +562,7 @@ func (r *BackupPolicyReconciler) failVerify(
 	policy *backupv1alpha1.BackupPolicy,
 	reason, msg string,
 	failedChecks []string,
+	restoreSeconds int64,
 	jobToDelete *batchv1.Job,
 ) (ctrl.Result, error) {
 	if jobToDelete != nil {
@@ -547,17 +577,20 @@ func (r *BackupPolicyReconciler) failVerify(
 	}
 
 	policy.Status.LastVerification = &backupv1alpha1.VerificationStatus{
-		Time:         &nowMeta,
-		Result:       backupv1alpha1.VerificationFailed,
-		ObjectKey:    objectKey,
-		FailedChecks: failedChecks,
-		Message:      msg,
+		Time:                   &nowMeta,
+		Result:                 backupv1alpha1.VerificationFailed,
+		ObjectKey:              objectKey,
+		RestoreDurationSeconds: restoreSeconds,
+		FailedChecks:           failedChecks,
+		Message:                msg,
 	}
 	r.setCondition(policy, backupv1alpha1.ConditionRestoreVerified, metav1.ConditionFalse, reason, msg)
 	r.emitEvent(policy, corev1.EventTypeWarning, "VerificationFailed", msg)
 	metrics.UpdatePolicyMetrics(policy)
 
 	r.recordHistory(policy)
+	// Keep only the Jobs of the last 3 runs here too, otherwise Jobs of failed runs pile up (rule 8).
+	_ = r.cleanupOldJobs(ctx, policy)
 	policy.Status.Phase = backupv1alpha1.PhaseIdle
 	policy.Status.CurrentRunID = 0
 

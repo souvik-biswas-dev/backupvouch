@@ -1,6 +1,6 @@
 # CONTEXT (handoff)
 
-Last updated: 2026-10-25 (step 7 done, step 8 written, not yet run)
+Last updated: 2026-10-25 (steps 7 and 8 on branch step8-dashboard, PR #7; demo and dashboard run on a real kind cluster)
 Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs PostgreSQL backups and verifies them by restoring into a scratch Postgres.
 Repo: github.com/souvik-biswas-dev/backupvouch. Step 6 was merged to `main` as PR #5 (merge commit `fedef4c`); in the screenshot taken just after, its CI checks were still running, so check the Actions tab. Step 7 is in `backupvouch-step7.zip`, not yet committed.
 
@@ -16,8 +16,8 @@ Repo: github.com/souvik-biswas-dev/backupvouch. Step 6 was merged to `main` as P
 | 4 | restore verification (`cmd/runner verify`, `internal/checks`, verify Job builder) | done |
 | 5 | controller (state machine, prune runner and builder, metrics, validation, envtest happy path) | done |
 | 6 | tests and CI (failure-path envtest specs, `hack/e2e.sh`, Makefile `verify`/`e2e`, CI workflows, TESTING.md) | merged (PR #5). Locally `make verify` passed (all packages ok, controller coverage 75.2%). `make lint` failed with a Go toolchain mismatch (export data version, not a code finding) and `make e2e` stopped because kind was missing; the results after fixing those were not reported |
-| 7 | packaging and demo | written, NOT run: `hack/lib.sh`, `hack/demo.sh`, `config/samples/demo/`, `make build-installer`/`demo`, `docs/INSTALL.md`, `publish-images.yml` |
-| 8 | optional dashboard (`internal/dashboard`, `--dashboard-bind-address`, `docs/DESIGN.md`, D21, D22) | written, NOT run or compiled |
+| 7 | packaging and demo | merged (PR #6); `make demo` now passes after two fixes, see the step 8 section. Was: `hack/lib.sh`, `hack/demo.sh`, `config/samples/demo/`, `make build-installer`/`demo`, `docs/INSTALL.md`, `publish-images.yml` |
+| 8 | optional dashboard (`internal/dashboard`, `--dashboard-bind-address`, `docs/DESIGN.md`, D21, D22) | done and seen in a browser; the findings below are polish |
 | 9 | final docs and polish | not started |
 
 ## Last verified state (steps 0 to 5, by the author, before step 6)
@@ -65,6 +65,20 @@ Still open (code behaves differently from `docs/ARCHITECTURE.md` or `docs/API.md
 | h | Prune result `{deleted, kept}` (ARCHITECTURE) | The prune message is not read, events carry no counts | Minor |
 | i | `docs/API.md` conditions table lists only the False reasons | Code also sets True reasons `SpecValid`, `BackupSucceeded`, `VerificationPassed` and Unknown `NoRunYet` | Doc gap, see API.md note |
 
+## Step 6b (2026-10-25): items a to f written, NOT yet compiled or run
+
+Written in a chat sandbox without Go, so run `make verify` first. Files: `internal/controller/backuppolicy_controller.go`, `pod_reader.go`, new `verify_result.go`, tests `verify_result_test.go`, `pod_reader_test.go`, `backuppolicy_failures_test.go`.
+
+- a: `metrics.UpdatePolicyMetrics` is called on every reconcile (after the finalizer check). Envtest spec "operator restart".
+- b: a missing verify Job is recreated from `status.lastBackup` (`recreateVerifyJob`); without a successful backup it fails with `InvalidRunnerResult`. Envtest spec.
+- c: verify reasons are whitelisted (`ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable`, plus `InvalidRunnerResult`, which the runner also writes); anything else becomes `RestoreFailed`.
+- d: `lastVerification.message` and the event now carry the failed check messages, or a reason-specific text when no check ran; failed runs also store the restore duration. The runner has no free-text message field, so a restore or storage failure only gets the reason text.
+- e: `InspectJobPods` sorts Pods by creation time, newest wins. Unit test.
+- f: `cleanupOldJobs` also runs after failed backups and verifications.
+- Restore duration is now rounded UP (a 0.4 s restore shows 1 s instead of "Not recorded").
+- Still open: g (suspend behaviour, decide and document), h (prune counts), i (API.md conditions table). Docs `ARCHITECTURE.md` and `RUNBOOK.md` were not edited.
+- The dashboard still prints "no check name was recorded" for a checksum failure (no check ran); change that text in `internal/dashboard/web/js/render.js` to show `message` instead.
+
 ## Known issues and VERIFY items
 
 - Step 6 e2e failed in CI because the MinIO images no longer exist (D20); fixed in step 7a by using SeaweedFS and curl. Still unverified until a green CI run: the tags `chrislusf/seaweedfs:4.42` and `curlimages/curl:8.12.1`, SeaweedFS `weed mini` flags (`-s3.config`, `-bucket`), SigV4 `PUT` with `UNSIGNED-PAYLOAD` accepted by SeaweedFS, kind `v0.30.0` in CI. Step 6 items that the log showed working: operator deploy and rollout, CRD, leader election, the events RBAC and metrics server start.
@@ -89,18 +103,31 @@ See `DECISIONS.md`, D1 to D19. D17: e2e is a bash script, the scaffold Ginkgo e2
 - The demo transcript in `docs/TESTING.md` is a marked placeholder; there was no cluster to record real output from. Run `make demo-transcript` and paste the result.
 - Open items a to i above are still open (the plan calls the fix for a to e "Step 6b"). The demo's failing case reports `ChecksumMismatch`; item d means `status.lastVerification.message` is only generic text for check failures. Item b (a deleted verify Job leaves the policy in `Verifying`) matters if you restart or delete things while presenting.
 
-## Step 8: what was done and how far it was checked
+## Step 8 and the demo: what happened on a real machine (2026-10-25)
 
-- Added `internal/dashboard` (view.go, server.go, tests), the page in `internal/dashboard/web`, the flag in `cmd/main.go`, `.dockerignore` re-include for the embedded files (without it `docker build` would fail), Makefile targets `dashboard-fonts|assets|js-test|enable` and `dashboard`, `hack/dashboard-fonts.sh`, docs (DESIGN, D21, D22, INSTALL, SECURITY, ARCHITECTURE, TESTING).
-- Checked in the sandbox: `node --check` on all modules, 18 node tests pass, `bash -n` on the font script, `make -n` on the new targets, glyph shapes drawn and looked at. NOT checked: Go compile and tests (no Go here; `gofmt` not run, so run `make fmt`), any browser rendering, the fake-client behaviour (VERIFY in server_test.go), `kubectl port-forward` to a loopback-bound listener (VERIFY), fonts (not downloaded: no network).
-- Known quirk: the history record of a run with verification disabled copies the previous verification result, so the page can draw it as vouched. History has no per-run restore duration or failed check, so only the latest run shows them.
+- Branch `step8-dashboard`, PR #7, last commit `2f3f631`. Locally: `make verify` passes (dashboard coverage 77.3%), `make dashboard-js-test` passes (18 tests). Fonts were fetched with `make dashboard-fonts` and committed.
+- `main` had conflict markers committed by mistake (Makefile, hack/e2e.sh, docs); PR #7 replaces those files with clean ones. Check the markers are gone: `grep -rIn '^<<<<<<<' . --exclude-dir=.git`.
+- `make demo` first FAILED twice and two real bugs were fixed (both are in the branch): (1) the `s3` Pod crash-looped because Kubernetes injected `S3_PORT=tcp://...` for the Service named `s3` and SeaweedFS tried to parse it: fixed with `enableServiceLinks: false` in `config/samples/demo/s3.yaml`; (2) the verify Job hung forever because `pg_ctl start` left the scratch Postgres holding the output pipe that `CombinedOutput` waits on: fixed with `-l <logfile>` and `WaitDelay` in `cmd/runner/verify.go`.
+- After the fixes `make demo` finished: healthy run verified in about 10 s, sabotage rejected with `ChecksumMismatch`, events and metric as expected. This is the first real run of steps 6, 7 and 8 together.
+- Dashboard (`make dashboard-enable`, `make dashboard`, http://localhost:9090) works through `kubectl port-forward` to the loopback listener (the earlier VERIFY is settled). Seen in Chrome: headline, verdict, facts, track with the passed (check) and failed (cut check) runs, the next-run dashed mark, the "What failed" block and the hint.
+
+## Dashboard findings from the first look (not fixed yet)
+
+1. The page was shown dark (Chrome forced dark mode or an extension): the logo wordmark (dark ink) is almost invisible on that background. Decide: either set `<meta name="color-scheme" content="light">` is already there, so check Chrome's "Auto Dark Mode for Web Contents" flag, or add a real dark theme using `logo-dark.svg` and the dark brand colours.
+2. The track is dominated by the 22 h to the next run, so runs made minutes apart sit on top of each other at the left edge. Consider capping the right end of the window (for example show "next" as an arrow at the edge when it is far) or zooming the window to the runs plus a margin.
+3. "Restore took: Not recorded" on a passed and a failed run: `restoreDurationSeconds` is empty because the runner reports under one second or the controller drops it; check `internal/controller` (item d below is related: the failed-check names and runner message are also dropped, so the page can only say "no check name was recorded").
+4. Not yet looked at: 375 px width, keyboard use of the track (arrows, Enter), reduced motion, the draw-in animation, favicon in the tab (a teal check shows in the tab, looks right).
+
+## CI state of PR #7
+
+Tests passes. E2E failed before the two demo fixes and should now pass (re-check the Actions tab; the tags `chrislusf/seaweedfs:4.42` and `curlimages/curl:8.12.1` worked locally). Lint fails in CI for a reason not yet seen: locally `make lint` fails only with a toolchain error (golangci-lint built for an older Go than the installed 1.27.2), so paste the log of the failing "Lint / Run on Ubuntu" job to find the real finding. The `kind` binary (v0.30.0) is installed in /usr/local/bin on the author's machine; the demo cluster `backupvouch-demo` may still be running (`kind delete cluster --name backupvouch-demo`).
 
 ## Next
 
-1. Run the verify commands below and paste failures back (Fix prompt).
-2. Commit step 7 on a branch (`git commit -s`, `Assisted-by:` trailer per AGENTS.md), open a PR, let the three workflows run.
-3. Consider Step 6b (open items a to e) before the optional dashboard and the final polish, since the demo shows failures and restarts.
-4. Step 8 (optional dashboard) or step 9 (final docs and polish: README still says "design phase").
+1. Paste the failing Lint job log from PR #7 and fix it; confirm E2E is green; merge PR #7.
+2. Dashboard polish from the findings above (dark mode and logo, crowded track, restore duration).
+3. Verify Step 6b (above), then the dashboard text for failures without a check name.
+4. Step 9: final docs (README still says "design phase"), put the real `make demo-transcript` output into `docs/TESTING.md`.
 
 ## To verify locally (step 8 first)
 

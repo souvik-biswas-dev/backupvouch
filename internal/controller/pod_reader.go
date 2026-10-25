@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -81,7 +82,18 @@ func InspectJobPods(
 		return inspection, nil
 	}
 
-	// Examine newest pod first
+	// List order is not guaranteed. Sort oldest to newest, so that when a retry created a second Pod the newest
+	// Pod's termination message is the one that stays (docs/ARCHITECTURE.md rule 5).
+	slices.SortStableFunc(podList.Items, func(a, b corev1.Pod) int {
+		switch {
+		case a.CreationTimestamp.Before(&b.CreationTimestamp):
+			return -1
+		case b.CreationTimestamp.Before(&a.CreationTimestamp):
+			return 1
+		default:
+			return 0
+		}
+	})
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 

@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +34,7 @@ import (
 
 	backupv1alpha1 "github.com/souvik-biswas-dev/backupvouch/api/v1alpha1"
 	"github.com/souvik-biswas-dev/backupvouch/internal/jobs"
+	"github.com/souvik-biswas-dev/backupvouch/internal/metrics"
 )
 
 // These specs add idempotency and failure paths to the happy path in backuppolicy_controller_test.go.
@@ -204,6 +206,18 @@ var _ = Describe("BackupPolicy controller failure paths", func() {
 		}
 	})
 
+	Context("operator restart", func() {
+		It("brings the metrics back from status on the next reconcile", func() {
+			startVerifying("metrics-restart")
+			metrics.DeletePolicyMetrics(failureTestNamespace, name) // what a restarted operator looks like
+
+			reconcileTimes(ctx, reconciler, key, 1)
+
+			Expect(testutil.ToFloat64(metrics.LastBackupTimestampSeconds.WithLabelValues(failureTestNamespace, name))).
+				To(Equal(float64(fixedTime.Unix())))
+		})
+	})
+
 	Context("idempotency", func() {
 		It("creates exactly one backup Job however often reconcile runs", func() {
 			runID := start("idem-policy")
@@ -338,6 +352,47 @@ var _ = Describe("BackupPolicy controller failure paths", func() {
 			expectCondition(policy, backupv1alpha1.ConditionRestoreVerified,
 				metav1.ConditionFalse, backupv1alpha1.ReasonCheckFailed)
 			Expect(policy.Status.LastVerification.FailedChecks).To(ConsistOf("users-not-empty"))
+			Expect(policy.Status.LastVerification.Message).To(Equal("check users-not-empty failed: expected true"))
+			Expect(policy.Status.LastVerification.RestoreDurationSeconds).To(Equal(int64(4)),
+				"3.2 s is rounded up, and a failed run still records how long the restore took")
+		})
+
+		It("gives a checksum failure a readable message", func() {
+			runID := startVerifying("fail-checksum-message")
+			jobName := jobs.VerifyJobName(name, runID)
+			markJobFailed(ctx, fetchJob(ctx, jobName), "BackoffLimitExceeded")
+			terminatedPod(ctx, jobName, `{"result":"Failed","reason":"ChecksumMismatch"}`, 1)
+
+			reconcileTimes(ctx, reconciler, key, 1)
+
+			policy := fetchPolicy(ctx, key)
+			Expect(policy.Status.LastVerification.Message).To(ContainSubstring("checksum"))
+			Expect(policy.Status.LastVerification.FailedChecks).To(BeEmpty())
+		})
+
+		It("does not copy an unknown reason from the runner into the condition", func() {
+			runID := startVerifying("fail-unknown-reason")
+			jobName := jobs.VerifyJobName(name, runID)
+			markJobFailed(ctx, fetchJob(ctx, jobName), "BackoffLimitExceeded")
+			terminatedPod(ctx, jobName, `{"result":"Failed","reason":"TotallyMadeUp"}`, 1)
+
+			reconcileTimes(ctx, reconciler, key, 1)
+
+			expectCondition(fetchPolicy(ctx, key), backupv1alpha1.ConditionRestoreVerified,
+				metav1.ConditionFalse, backupv1alpha1.ReasonRestoreFailed)
+		})
+
+		It("recreates a verify Job that was deleted while Verifying", func() {
+			runID := startVerifying("verify-job-deleted")
+			jobName := jobs.VerifyJobName(name, runID)
+			Expect(k8sClient.Delete(ctx, fetchJob(ctx, jobName),
+				client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
+
+			reconcileTimes(ctx, reconciler, key, 1)
+
+			Expect(fetchJob(ctx, jobName).Labels[backupv1alpha1.LabelRole]).To(Equal(backupv1alpha1.RoleVerify))
+			Expect(fetchPolicy(ctx, key).Status.Phase).To(Equal(backupv1alpha1.PhaseVerifying))
+			Expect(countJobsWithRole(ctx, name, backupv1alpha1.RoleVerify)).To(Equal(1))
 		})
 
 		It("reports VerificationTimeout when the Job exceeds its deadline", func() {
