@@ -24,6 +24,7 @@ import (
 	"slices"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	backupv1alpha1 "github.com/souvik-biswas-dev/backupvouch/api/v1alpha1"
@@ -96,7 +97,9 @@ type Backup struct {
 	Message   string     `json:"message,omitempty"`
 }
 
-// Verification mirrors status.lastVerification.
+// Verification mirrors status.lastVerification. Reason is the reason of the
+// RestoreVerified condition while it is False (ChecksumMismatch, RestoreFailed
+// and so on); the page uses it to say whether the backup was restored at all.
 type Verification struct {
 	Time                   *time.Time `json:"time,omitempty"`
 	Result                 string     `json:"result,omitempty"`
@@ -104,6 +107,7 @@ type Verification struct {
 	RestoreDurationSeconds int64      `json:"restoreDurationSeconds,omitempty"`
 	FailedChecks           []string   `json:"failedChecks,omitempty"`
 	Message                string     `json:"message,omitempty"`
+	Reason                 string     `json:"reason,omitempty"`
 }
 
 // Run is one entry of status.history, oldest first in the response.
@@ -183,9 +187,23 @@ func buildPolicy(bp *backupv1alpha1.BackupPolicy, now time.Time) Policy {
 			RestoreDurationSeconds: lv.RestoreDurationSeconds,
 			FailedChecks:           append([]string(nil), lv.FailedChecks...),
 			Message:                lv.Message,
+			Reason:                 failureReason(st),
 		}
 	}
 	return p
+}
+
+// failureReason returns the reason of the RestoreVerified condition, but only
+// while that condition is False. A stale reason must not describe a passed run.
+func failureReason(st *backupv1alpha1.BackupPolicyStatus) string {
+	if st.LastVerification == nil || st.LastVerification.Result != backupv1alpha1.VerificationFailed {
+		return ""
+	}
+	c := meta.FindStatusCondition(st.Conditions, backupv1alpha1.ConditionRestoreVerified)
+	if c == nil || c.Status != metav1.ConditionFalse {
+		return ""
+	}
+	return c.Reason
 }
 
 // verdictOf decides whether the NEWEST backup is vouched for. A verification of

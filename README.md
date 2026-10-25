@@ -9,22 +9,24 @@
 
 A Kubernetes operator that proves your database backups can be restored.
 
-BackupVouch runs PostgreSQL backups on a schedule, restores each one into a throwaway Postgres, runs the SQL checks you define, and reports **Verified** or **Failed** through status conditions, events, and Prometheus metrics. A backup only counts once it has been restored and checked.
+BackupVouch runs PostgreSQL backups on a schedule, restores each one into a throwaway Postgres, runs the SQL checks you define, and reports the result through status conditions, events, Prometheus metrics and an optional read-only dashboard.
 
-> **Status: design phase.** The documents in this repository describe what v0.1 will do. The code is being built step by step, see `docs/PLAN.md` and `docs/CONTEXT.md`. Nothing below is claimed to work yet.
+**A backup only counts once it has been restored and checked.** A backup job that exits with code 0 proves very little: a truncated dump, a rotated credential or a missing table usually shows up during an incident. BackupVouch turns "we have backups" into "we restored last night's backup and these checks passed".
 
-## Why
+> **Status: early (API `v1alpha1`).** The operator, the runner and the dashboard work in a kind cluster (`make demo`, `make e2e`). It has not been run in production, the API may still change, and no release has been published yet.
 
-Backup jobs usually report success when the command exits with code 0. A truncated dump, a rotated credential, or a missing table only shows up during an incident. BackupVouch turns "we have backups" into "we restored last night's backup and these checks passed".
+## Quickstart
 
-## Planned quickstart
+You need docker, kind and kubectl.
 
     make demo           # builds the images, creates a kind cluster, then: backup, verify OK, sabotage, verify FAILED
     make demo-clean     # delete the demo cluster afterwards
 
-It needs docker, kind and kubectl and prints the BackupPolicy status and events after each stage. See `docs/TESTING.md`. To install the operator in your own cluster see `docs/INSTALL.md`.
+The demo takes a real backup of a small Postgres, restores it and passes the checks. It then overwrites the stored backup with garbage and asks for a re-check, which must fail. It prints the policy status and events after each stage. See [docs/TESTING.md](docs/TESTING.md).
 
-## Planned example
+To install the operator in your own cluster, see [docs/INSTALL.md](docs/INSTALL.md).
+
+## Example
 
     apiVersion: backup.backupvouch.dev/v1alpha1
     kind: BackupPolicy
@@ -45,6 +47,35 @@ It needs docker, kind and kubectl and prints the BackupPolicy status and events 
           - name: users-not-empty
             sql: "SELECT count(*) > 0 FROM users"
 
+## What you see
+
+    kubectl get backuppolicies        # short name: bp
+    kubectl describe backuppolicy app-db
+
+| Where | What it tells you |
+|---|---|
+| `status.conditions` | `SpecValid`, `BackupReady` and `RestoreVerified`, each True, False (with a reason) or Unknown |
+| `status.lastBackup` | time, result, stored object key, size and SHA-256 |
+| `status.lastVerification` | result, restore time in whole seconds, `failedChecks`, and a `message` saying why it failed |
+| `status.history` | the last 10 runs |
+| Events | `BackupSucceeded`, `VerificationPassed`, `VerificationFailed` (with the reason), `RetentionPruned` and others |
+| Metrics | `backupvouch_*` series, for example `backupvouch_verification_success` and `backupvouch_last_verified_timestamp_seconds` |
+
+Every field and reason is in [docs/API.md](docs/API.md). Alert examples are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
+
+## Dashboard (optional, off by default)
+
+A small read-only page that answers one question per policy: can the newest backup be trusted? It is unauthenticated and listens on the loopback address inside the operator Pod, so you reach it with `kubectl port-forward`.
+
+    make dashboard-enable
+    make dashboard         # then open http://localhost:9090
+
+Details and the security notes are in [docs/INSTALL.md](docs/INSTALL.md) and [SECURITY.md](SECURITY.md).
+
+## Security
+
+The operator runs Jobs with a fixed non-root user, a read-only root filesystem and no capabilities. Only allow-listed runner images are used, and failure messages are kept short and built not to carry row data. The threat model, the operator's RBAC and a recommended NetworkPolicy are in [SECURITY.md](SECURITY.md). To report a vulnerability, follow the instructions there.
+
 ## Documents
 
 | Document | Contents |
@@ -53,7 +84,7 @@ It needs docker, kind and kubectl and prints the BackupPolicy status and events 
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | components, reconcile flow, state machine |
 | [docs/API.md](docs/API.md) | BackupPolicy reference |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | design decisions and reasons |
-| [docs/INSTALL.md](docs/INSTALL.md) | install, runner image allow-list, uninstall |
+| [docs/INSTALL.md](docs/INSTALL.md) | install, runner image allow-list, dashboard, uninstall |
 | [docs/TESTING.md](docs/TESTING.md) | test layers, the sabotage demo, CI |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | what to do when something fails |
 | [SECURITY.md](SECURITY.md) | threat model and permissions |
@@ -62,12 +93,16 @@ It needs docker, kind and kubectl and prints the BackupPolicy status and events 
 
 ## How this differs from other tools
 
-See the comparison in [docs/SPEC.md](docs/SPEC.md). In short: many tools appear to focus on taking backups and restoring on demand (verify); BackupVouch focuses on automatically proving that the latest backup restores. FireDrill appears to be an existing project in the same space (verify), so BackupVouch does not claim to be first; its difference is one resource that takes the backup and proves it. Claims about other projects must be checked against their current documentation before release.
+BackupVouch is not the first tool in this space. Backup tools such as Velero, CloudNativePG and K8up take or restore backups, and other projects already verify backups made by other tools. BackupVouch's narrower idea is one Kubernetes resource that takes the PostgreSQL backup and proves it, with a small codebase and no dependency on another backup tool. The comparison table is in [docs/SPEC.md](docs/SPEC.md); it was written from memory and is being checked against each project's current documentation.
 
-## Limitations (planned v0.1)
+## Limitations
 
-PostgreSQL only, and one Postgres major version (16) per runner image. No point-in-time recovery. Verification checks are SQL you write. No automatic restore into production.
+PostgreSQL only, and one Postgres major version (16) per runner image. No point-in-time recovery. Verification checks are SQL you write. BackupVouch never restores into production. The API is `v1alpha1`.
+
+## Contributing
+
+Run `make fmt && make verify` before opening a pull request. See [docs/TESTING.md](docs/TESTING.md) and [AGENTS.md](AGENTS.md).
 
 ## License
 
-To be decided (Apache-2.0 suggested).
+Apache-2.0 is intended: the source files carry the Apache-2.0 header. The `LICENSE` file is still to be added before the first release.

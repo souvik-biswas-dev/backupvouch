@@ -195,6 +195,7 @@ h1.bad { color: var(--fracture); }
   font-variant-numeric: tabular-nums;
 }
 .now-line { stroke: var(--ink); stroke-width: 2; }
+.next-arrow { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .marker-label { font: 600 12px var(--sans); fill: var(--ink); }
 
 .g {

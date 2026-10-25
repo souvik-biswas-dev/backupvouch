@@ -1,6 +1,6 @@
 # TESTING
 
-Status: step 7. Unit and envtest layers pass locally (see CONTEXT.md for the last numbers). `hack/e2e.sh`, `hack/demo.sh` and the CI workflows were written without a cluster in reach; the first real runs may need small fixes (see CONTEXT.md).
+Status: step 9. Unit and envtest layers pass locally (`make verify`, controller coverage 77.8% after step 6b). `make e2e` and `make demo` have run against a real kind cluster.
 
 ## Layers
 
@@ -32,7 +32,7 @@ Files: `internal/controller/backuppolicy_controller_test.go` (happy path, invali
 | Invalid schedule sets `SpecValid=False` | invalid schedule spec |
 | Events are emitted | not asserted in envtest (no recorder is wired); `hack/e2e.sh` checks `VerificationPassed` and `VerificationFailed` |
 
-Not covered yet (candidates for later): the same re-verify value is never acted on twice, missed schedules produce a single run (covered by `internal/schedule` unit tests, not through the controller), the prune Job receives the protected object key, a verification Job that disappeared mid-run (the controller currently waits forever, see CONTEXT.md known gaps).
+Not covered yet (candidates for later): the same re-verify value is never acted on twice, missed schedules produce a single run (covered by `internal/schedule` unit tests, not through the controller), the prune Job receives the protected object key, (a verification Job that disappeared mid-run is recreated since step 6b).
 
 ## The sabotage demo
 
@@ -94,13 +94,206 @@ GitHub Actions, free for public repositories, on every push and pull request:
 
 ## Demo transcript
 
-**Not recorded yet.** The demo was exercised only against stub `kubectl`, `kind` and `make` commands (to check the script's flow), never against a real cluster, so there is no real output to show. Recording it is a one-command step on your machine:
+Recorded with `make demo-transcript` on 2026-10-25. The image build and cluster creation lines before the first stage are cut; the rest is unedited.
 
-    make demo-transcript      # runs the demo, saves the output to dist/demo-transcript.txt
+```text
+==> HEALTHY CASE: apply the BackupPolicy and wait for a verified restore
 
-Then paste the interesting parts here (the image build lines can be cut): the applied policy, the output of "Result 1" and "Result 2", and the final `DEMO FINISHED` line. Do not edit the output. If a run fails, paste it into a new chat with the Fix prompt instead.
+# The source database has a users table with 3 rows. This policy takes a backup, restores it into a throwaway Postgres and runs two SQL checks against the restored copy.
+
+$ cat config/samples/demo/policy.yaml
+# The BackupPolicy used by hack/e2e.sh and hack/demo.sh. The schedule has a past occurrence, so the first run starts at once.
+apiVersion: backup.backupvouch.dev/v1alpha1
+kind: BackupPolicy
+metadata:
+  name: app-db
+  namespace: default
+spec:
+  schedule: "0 2 * * *"
+  timeZone: UTC
+  source:
+    engine: postgres
+    host: postgres.default.svc
+    port: 5432
+    database: app
+    credentialsSecretRef:
+      name: pg-creds
+  storage:
+    endpoint: s3.default.svc:8333
+    bucket: backups
+    prefix: app/
+    useTLS: false
+    credentialsSecretRef:
+      name: s3-creds
+  retention:
+    keepLast: 3
+  backupTimeoutSeconds: 300
+  verify:
+    enabled: true
+    timeoutSeconds: 600
+    scratchSize: 1Gi
+    checks:
+      - name: users-not-empty
+        sql: "SELECT count(*) > 0 FROM users"
+        expect: "true"
+      - name: users-count
+        sql: "SELECT count(*) FROM users"
+        expect: "3"
+backuppolicy.backup.backupvouch.dev/app-db created
+ok: RestoreVerified=True
+ok: run finished (phase Idle after the prune Job)
+ok: metric backupvouch_verification_success 1
+ok: event VerificationPassed
+
+==> healthy case OK
+
+# Result 1: the backup was taken, restored, checked and verified (RestoreVerified=True).
+
+$ kubectl get backuppolicy app-db
+NAME     SCHEDULE    PHASE   LAST BACKUP   VERIFIED   RESTORE TIME   AGE
+app-db   0 2 * * *   Idle    7s            True       1              10s
+
+$ kubectl get backuppolicy app-db -o yaml   # status only
+status:
+  conditions:
+  - lastTransitionTime: "2026-10-25T04:54:53Z"
+    message: spec is valid
+    observedGeneration: 1
+    reason: SpecValid
+    status: "True"
+    type: SpecValid
+  - lastTransitionTime: "2026-10-25T04:54:56Z"
+    message: backup completed successfully
+    observedGeneration: 1
+    reason: BackupSucceeded
+    status: "True"
+    type: BackupReady
+  - lastTransitionTime: "2026-10-25T04:54:59Z"
+    message: restore verification passed all checks
+    observedGeneration: 1
+    reason: VerificationPassed
+    status: "True"
+    type: RestoreVerified
+  history:
+  - backupResult: Succeeded
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    runID: 1792893600
+    time: "2026-10-25T04:55:02Z"
+    verificationResult: Passed
+  lastBackup:
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    result: Succeeded
+    sha256: 8cb44f7beee61dfdfa1aed0834c02d35b4a1baa39f9497532e85faa1f37b1dca
+    sizeBytes: 2894
+    time: "2026-10-25T04:54:56Z"
+  lastRunID: 1792893600
+  lastVerification:
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    restoreDurationSeconds: 1
+    result: Passed
+    time: "2026-10-25T04:54:59Z"
+  phase: Idle
+
+$ kubectl get events --field-selector involvedObject.name=app-db
+LAST SEEN   TYPE     REASON                OBJECT                MESSAGE
+9s          Normal   BackupStarted         backuppolicy/app-db   Started scheduled backup
+6s          Normal   BackupSucceeded       backuppolicy/app-db   Backup created successfully
+6s          Normal   VerificationStarted   backuppolicy/app-db   Started verification job
+3s          Normal   VerificationPassed    backuppolicy/app-db   Verification passed successfully
+0s          Normal   RetentionPruned       backuppolicy/app-db   Retention pruning completed successfully
+
+==> SABOTAGE: corrupt the stored dump, then ask for a re-verification
+
+# Now we simulate bit rot: the stored backup is overwritten with garbage. The backup job succeeded earlier, so a tool that only checks the backup job would still say everything is fine.
+overwriting s3://backups/app/2026-10-25T02-00-00Z.dump with garbage
+
+# We ask BackupVouch to check the stored backup again (annotation backupvouch.dev/reverify). A scheduled run would take a fresh good backup, so it would not show the problem.
+
+$ kubectl annotate backuppolicy app-db backupvouch.dev/reverify=1792904107
+backuppolicy.backup.backupvouch.dev/app-db annotated
+ok: controller acted on the annotation
+ok: RestoreVerified=False
+ok: run finished (phase Idle)
+ok: event VerificationFailed
+ok: metric backupvouch_verification_success 0
+
+==> sabotage OK: the corrupted backup was rejected with reason ChecksumMismatch
+
+# Result 2: the corrupted backup was caught (RestoreVerified=False, reason ChecksumMismatch), a VerificationFailed event was emitted.
+
+$ kubectl get backuppolicy app-db
+NAME     SCHEDULE    PHASE   LAST BACKUP   VERIFIED   RESTORE TIME   AGE
+app-db   0 2 * * *   Idle    27s           False                     30s
+
+$ kubectl get backuppolicy app-db -o yaml   # status only
+status:
+  conditions:
+  - lastTransitionTime: "2026-10-25T04:54:53Z"
+    message: spec is valid
+    observedGeneration: 1
+    reason: SpecValid
+    status: "True"
+    type: SpecValid
+  - lastTransitionTime: "2026-10-25T04:54:56Z"
+    message: backup completed successfully
+    observedGeneration: 1
+    reason: BackupSucceeded
+    status: "True"
+    type: BackupReady
+  - lastTransitionTime: "2026-10-25T04:55:21Z"
+    message: the stored backup does not match the checksum recorded when it was taken
+    observedGeneration: 1
+    reason: ChecksumMismatch
+    status: "False"
+    type: RestoreVerified
+  history:
+  - backupResult: Succeeded
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    runID: 1792904107
+    time: "2026-10-25T04:55:21Z"
+    verificationResult: Failed
+  - backupResult: Succeeded
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    runID: 1792893600
+    time: "2026-10-25T04:55:02Z"
+    verificationResult: Passed
+  lastBackup:
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    result: Succeeded
+    sha256: 8cb44f7beee61dfdfa1aed0834c02d35b4a1baa39f9497532e85faa1f37b1dca
+    sizeBytes: 2894
+    time: "2026-10-25T04:54:56Z"
+  lastReverifyID: 1792904107
+  lastRunID: 1792893600
+  lastVerification:
+    message: the stored backup does not match the checksum recorded when it was taken
+    objectKey: app/2026-10-25T02-00-00Z.dump
+    result: Failed
+    time: "2026-10-25T04:55:21Z"
+  phase: Idle
+
+$ kubectl get events --field-selector involvedObject.name=app-db
+LAST SEEN   TYPE      REASON                OBJECT                MESSAGE
+30s         Normal    BackupStarted         backuppolicy/app-db   Started scheduled backup
+26s         Normal    BackupSucceeded       backuppolicy/app-db   Backup created successfully
+26s         Normal    VerificationStarted   backuppolicy/app-db   Started verification job
+23s         Normal    VerificationPassed    backuppolicy/app-db   Verification passed successfully
+20s         Normal    RetentionPruned       backuppolicy/app-db   Retention pruning completed successfully
+15s         Normal    VerificationStarted   backuppolicy/app-db   Started manual re-verification
+2s          Warning   VerificationFailed    backuppolicy/app-db   the stored backup does not match the checksum recorded when it was taken
+
+==> final status
+NAME     SCHEDULE    PHASE   LAST BACKUP   VERIFIED   RESTORE TIME   AGE
+app-db   0 2 * * *   Idle    27s           False                     30s
+
+# What you saw: the backup job had succeeded, yet the stored copy could no longer be restored. BackupVouch found that out by restoring it, and reports it in status conditions, events and the backupvouch_verification_success metric.
+kind cluster backupvouch-demo kept, delete it with: kind delete cluster --name backupvouch-demo
+inspect it with: kubectl --context kind-backupvouch-demo -n default get backuppolicy app-db -o yaml
+
+DEMO FINISHED: the healthy backup was verified and the sabotaged one was rejected.
+```
 
 ## Dashboard tests (step 8)
 
 - `go test ./internal/dashboard/...`: verdict and run-state tables, ordering, next run, no connection details in the JSON, read-only methods, headers, no directory listing, error without detail, and file checks (brand copies identical, no remote URLs, no inline code, no `innerHTML`, referenced fonts present).
-- `make dashboard-js-test`: node tests for the scale, formatting and headline text. Not covered: drawing; look at it in a browser.
+- `make dashboard-js-test`: node tests for the scale (including minute steps and the 30 minute minimum window), formatting, headline text and the failure wording by reason. Not covered: drawing; look at it in a browser at 1280 px and 375 px (`make demo` creates three runs a few minutes apart).

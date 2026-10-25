@@ -50,7 +50,7 @@ spec:
 |---|---|---|---|
 | `schedule` | string | required | five-field cron expression |
 | `timeZone` | string | `UTC` | IANA time zone name |
-| `suspend` | bool | `false` | pauses scheduling, running Jobs finish |
+| `suspend` | bool | `false` | stops all new work. A run that is already in progress finishes. While suspended and idle, the controller does nothing else: no scheduled runs, no manual re-verification (the `backupvouch.dev/reverify` annotation is ignored until `suspend` is false again), and `BackupReady` and `RestoreVerified` are not created for a policy that never ran (`SpecValid` still is). Metrics and the dashboard keep showing the last status |
 | `source.engine` | enum | `postgres` | only `postgres` in v1 |
 | `source.host` | string | required | host or service name |
 | `source.port` | int | `5432` | 1-65535 |
@@ -95,9 +95,9 @@ The runner runs each check inside a read-only transaction with a statement timeo
 | `lastVerification.time` | when the last verification finished |
 | `lastVerification.result` | `Passed` or `Failed` |
 | `lastVerification.objectKey` | the backup object that was verified (the newest verified backup is protected from retention) |
-| `lastVerification.restoreDurationSeconds` | measured restore time in whole seconds (rounded by the controller; CRDs avoid floating-point fields, see D16) |
+| `lastVerification.restoreDurationSeconds` | measured restore time in whole seconds (rounded up by the controller, so a restore that took 0.4 s shows 1; the runner measures with a fraction; CRDs avoid floating-point fields, see D16) |
 | `lastVerification.failedChecks` | names of checks that failed |
-| `lastVerification.message` | short reason on failure |
+| `lastVerification.message` | on failure, the messages of the failed checks, or a fixed text for the reason when no check ran (for example `ChecksumMismatch`: the stored backup does not match the checksum recorded when it was taken). Empty on success |
 | `history` | the last 10 runs: `runID`, time, objectKey, backup result, verification result |
 | `conditions` | see below |
 
@@ -109,7 +109,18 @@ The runner runs each check inside a read-only transaction with a statement timeo
 | `BackupReady` | the last backup succeeded | `SourceUnreachable`, `StorageUnreachable`, `SecretMissing`, `BackupJobFailed`, `BackupTimeout`, `InvalidRunnerResult` |
 | `RestoreVerified` | the last backup was restored and every check passed | `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable`, `SecretMissing`, `VerificationTimeout`, `InvalidRunnerResult` |
 
-When a condition is True the reason is `SpecValid`, `BackupSucceeded` or `VerificationPassed`; before the first run the reason is `NoRunYet`.
+Reasons while a condition is **not** False:
+
+| Type | Status | Reason | When |
+|---|---|---|---|
+| `SpecValid` | True | `SpecValid` | the spec passed validation |
+| `BackupReady` | True | `BackupSucceeded` | the last backup succeeded |
+| `BackupReady` | Unknown | `NoRunYet` | no backup has finished yet |
+| `RestoreVerified` | True | `VerificationPassed` | the last backup was restored and every check passed |
+| `RestoreVerified` | Unknown | `NoRunYet` | no verification has finished yet |
+| `RestoreVerified` | Unknown | `VerificationDisabled` | `verify.enabled` is false |
+
+The controller only accepts a verification failure reason from the list above (`ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable`, `SecretMissing`, `VerificationTimeout`, `InvalidRunnerResult`). Any other reason sent by a runner is recorded as `RestoreFailed`.
 
 `BackupReady` and `RestoreVerified` are `Unknown` until the first backup or verification finishes. When `verify.enabled` is false, `RestoreVerified` stays `Unknown` with reason `VerificationDisabled`. While `SpecValid` is False, no new run starts.
 
