@@ -28,7 +28,7 @@ Three places hold the reason, from short to long:
 
 1. `kubectl get backuppolicies` shows only `VERIFIED` (True, False or Unknown).
 2. `status.lastVerification` has the detail: `failedChecks` names each failing check, and `message` says why. With failed checks, `message` holds their messages. Without any (for example `ChecksumMismatch`, where nothing was restored), `message` is a fixed text for the reason. The same text is in the `VerificationFailed` event (`kubectl describe backuppolicy <name>`).
-3. The Pod logs of the verify Job (`kubectl logs -l backupvouch.pages.dev/role=verify`) have the full output. The runner keeps messages short and free of row data, so go to the logs for the rest.
+3. The Pod logs of the verify Job (`kubectl logs -l backupvouch.pages.dev/role=verify`) have the full output. The runner keeps messages short and free of text or row contents (a failed check may show a boolean or a short number), so go to the logs for the rest.
 
 `Restore took: Not recorded` in the dashboard is normal for a checksum failure: no restore happened.
 

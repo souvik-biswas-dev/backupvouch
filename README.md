@@ -76,7 +76,7 @@ Details and the security notes are in [docs/INSTALL.md](docs/INSTALL.md) and [SE
 
 ## Security
 
-The operator runs Jobs with a fixed non-root user, a read-only root filesystem and no capabilities. Only allow-listed runner images are used, and failure messages are kept short and built not to carry row data. The threat model, the operator's RBAC and a recommended NetworkPolicy are in [SECURITY.md](SECURITY.md). To report a vulnerability, follow the instructions there.
+The operator runs Jobs with a fixed non-root user, a read-only root filesystem and no capabilities. Only allow-listed runner images are used, and failure messages are kept short and never carry text or row contents (a failed check may show a boolean or a short number, see [ARCHITECTURE.md](docs/ARCHITECTURE.md)). The threat model, the operator's RBAC and a recommended NetworkPolicy are in [SECURITY.md](SECURITY.md). To report a vulnerability, follow the instructions there.
 
 ## Documents
 
