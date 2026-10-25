@@ -1,16 +1,21 @@
 // A linear time scale and tick placement for the proof track. No DOM, so it can be tested with node.
+export const MINUTE = 60e3;
 export const HOUR = 3600e3;
 export const DAY = 24 * HOUR;
 
-const STEPS = [1, 2, 3, 6, 12].map((n) => n * HOUR).concat([1, 2, 7, 14, 30].map((n) => n * DAY));
+const STEPS = [5, 10, 15, 30].map((n) => n * MINUTE)
+  .concat([1, 2, 3, 6, 12].map((n) => n * HOUR)).concat([1, 2, 7, 14, 30].map((n) => n * DAY));
 
 export function linear(d0, d1, r0, r1) {
   const k = d1 === d0 ? 0 : (r1 - r0) / (d1 - d0);
   return (v) => r0 + (v - d0) * k;
 }
 
+// MIN_SPAN is the narrowest window the track shows, so a few runs minutes apart still get room.
+export const MIN_SPAN = 30 * MINUTE;
+
 // timeWindow returns [lo, hi] covering all times, at least minSpan wide.
-export function timeWindow(times, minSpan = 6 * HOUR) {
+export function timeWindow(times, minSpan = MIN_SPAN) {
   let lo = Math.min(...times);
   const hi = Math.max(...times);
   if (hi - lo < minSpan) lo = hi - minSpan;

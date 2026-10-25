@@ -10,10 +10,52 @@ export const VERDICT_WORD = {
 
 export const VERDICT_TEXT = {
   vouched: 'The newest backup was restored and every check passed.',
-  failed: 'The newest backup was restored, but a check failed. Do not rely on it.',
+  failed: 'The newest backup failed its restore check. Do not rely on it.',
   'backup-failed': 'The newest backup did not complete, so there is nothing new to trust.',
   unverified: 'The newest backup has not been restored and checked yet.',
 };
+
+// The reasons come from the RestoreVerified condition (docs/API.md). Only the newest run has one.
+const FAILED_VERDICT_BY_REASON = {
+  ChecksumMismatch: 'The newest backup could not be trusted and was not restored. Do not rely on it.',
+  StorageUnreachable: 'The newest backup could not be trusted and was not restored. Do not rely on it.',
+  RestoreFailed: 'The newest backup could not be restored. Do not rely on it.',
+  CheckFailed: 'The newest backup was restored, but a check failed. Do not rely on it.',
+};
+
+const FAILED_RUN_BY_REASON = {
+  ChecksumMismatch: 'Backed up, but the stored backup could not be trusted, so it was not restored.',
+  StorageUnreachable: 'Backed up, but the stored backup could not be read, so it was not restored.',
+  RestoreFailed: 'Backed up, but the restore failed.',
+  CheckFailed: 'Backed up and restored, but a check failed.',
+};
+
+// verdictText is the sentence under the verdict word. For a failed run it depends on the reason.
+export function verdictText(verdict, reason) {
+  if (verdict === 'failed' && FAILED_VERDICT_BY_REASON[reason]) return FAILED_VERDICT_BY_REASON[reason];
+  return VERDICT_TEXT[verdict];
+}
+
+// runText is the sentence for one run. reason only applies to the newest run, so pass '' for older ones.
+export function runText(state, reason) {
+  if (state === 'verify-failed' && FAILED_RUN_BY_REASON[reason]) return FAILED_RUN_BY_REASON[reason];
+  return RUN_TEXT[state];
+}
+
+// failureSummary decides what the "What failed" block says for a failed restore check.
+// With failed checks the list is the main content and the message is detail under it.
+// Without any, the message is the main line, with a fallback when it is empty.
+export function failureSummary(lv) {
+  const checks = (lv && lv.failedChecks) || [];
+  const message = (lv && lv.message) || '';
+  if (checks.length > 0) return { checks, main: '', detail: message, showHint: false };
+  return {
+    checks,
+    main: message || 'The restore check failed and no reason was recorded.',
+    detail: '',
+    showHint: true,
+  };
+}
 
 export const PHASE_TEXT = {
   BackingUp: 'Backing up now',
@@ -23,7 +65,7 @@ export const PHASE_TEXT = {
 
 export const RUN_TEXT = {
   vouched: 'Backed up, restored and every check passed.',
-  'verify-failed': 'Backed up and restored, but a check failed.',
+  'verify-failed': 'Backed up, but the restore check failed.',
   'backup-failed': 'The backup failed, so nothing was stored.',
   unverified: 'Backed up, not restored and checked yet.',
 };

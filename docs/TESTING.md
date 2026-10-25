@@ -1,6 +1,6 @@
 # TESTING
 
-Status: step 7. Unit and envtest layers pass locally (see CONTEXT.md for the last numbers). `hack/e2e.sh`, `hack/demo.sh` and the CI workflows were written without a cluster in reach; the first real runs may need small fixes (see CONTEXT.md).
+Status: step 9. Unit and envtest layers pass locally (`make verify`, controller coverage 77.8% after step 6b). `make e2e` and `make demo` have run against a real kind cluster.
 
 ## Layers
 
@@ -32,7 +32,7 @@ Files: `internal/controller/backuppolicy_controller_test.go` (happy path, invali
 | Invalid schedule sets `SpecValid=False` | invalid schedule spec |
 | Events are emitted | not asserted in envtest (no recorder is wired); `hack/e2e.sh` checks `VerificationPassed` and `VerificationFailed` |
 
-Not covered yet (candidates for later): the same re-verify value is never acted on twice, missed schedules produce a single run (covered by `internal/schedule` unit tests, not through the controller), the prune Job receives the protected object key, a verification Job that disappeared mid-run (the controller currently waits forever, see CONTEXT.md known gaps).
+Not covered yet (candidates for later): the same re-verify value is never acted on twice, missed schedules produce a single run (covered by `internal/schedule` unit tests, not through the controller), the prune Job receives the protected object key, (a verification Job that disappeared mid-run is recreated since step 6b).
 
 ## The sabotage demo
 
@@ -94,13 +94,11 @@ GitHub Actions, free for public repositories, on every push and pull request:
 
 ## Demo transcript
 
-**Not recorded yet.** The demo was exercised only against stub `kubectl`, `kind` and `make` commands (to check the script's flow), never against a real cluster, so there is no real output to show. Recording it is a one-command step on your machine:
+<!-- DEMO-TRANSCRIPT-PLACEHOLDER: replace this whole block with real output. Record it with `make demo-transcript` (saved to dist/demo-transcript.txt). Do not edit the output; image build lines may be cut. -->
 
-    make demo-transcript      # runs the demo, saves the output to dist/demo-transcript.txt
-
-Then paste the interesting parts here (the image build lines can be cut): the applied policy, the output of "Result 1" and "Result 2", and the final `DEMO FINISHED` line. Do not edit the output. If a run fails, paste it into a new chat with the Fix prompt instead.
+**Not recorded yet.** Run `make demo-transcript`, then paste the applied policy, "Result 1", "Result 2" and the final `DEMO FINISHED` line here, inside a code block. To find this spot again: `grep -n DEMO-TRANSCRIPT docs/TESTING.md`.
 
 ## Dashboard tests (step 8)
 
 - `go test ./internal/dashboard/...`: verdict and run-state tables, ordering, next run, no connection details in the JSON, read-only methods, headers, no directory listing, error without detail, and file checks (brand copies identical, no remote URLs, no inline code, no `innerHTML`, referenced fonts present).
-- `make dashboard-js-test`: node tests for the scale, formatting and headline text. Not covered: drawing; look at it in a browser.
+- `make dashboard-js-test`: node tests for the scale (including minute steps and the 30 minute minimum window), formatting, headline text and the failure wording by reason. Not covered: drawing; look at it in a browser at 1280 px and 375 px (`make demo` creates three runs a few minutes apart).

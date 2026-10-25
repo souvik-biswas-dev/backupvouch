@@ -67,7 +67,7 @@ Short records of design choices. Add a new record when something changes.
 ## D11: Failures travel through the termination message too
 
 - **Context:** the controller must tell `SourceUnreachable` from `StorageUnreachable` without reading Pod logs, and a Job that merely "failed" carries no reason.
-- **Decision:** the runner writes `{"error":{"reason":...,"message":...}}` on failure and a `reason` in the verify result. The controller trusts only reasons from a fixed list, and maps anything else to `BackupJobFailed` or `InvalidRunnerResult`.
+- **Decision:** the runner writes `{"error":{"reason":...,"message":...}}` on failure and a `reason` in the verify result. The controller trusts only reasons from a fixed list, and maps anything else to `BackupJobFailed` or `InvalidRunnerResult` for backups, and to `RestoreFailed` for an unknown verify reason (`isValidVerifyFailureReason`).
 - **Consequences:** reasons are precise, but the runner must classify errors carefully (step 3 and 4).
 
 ## D12: Retention is a third Job, `runner prune`

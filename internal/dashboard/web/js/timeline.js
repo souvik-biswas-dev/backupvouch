@@ -3,7 +3,7 @@
 import { s } from './dom.js';
 import { glyph } from './glyphs.js';
 import { DAY, linear, pickStep, spread, tickTimes, timeWindow } from './scale.js';
-import { clock, shortDate } from './format.js';
+import { clock, relative, shortDate } from './format.js';
 
 const BASE = 64; // y of the time axis
 const HEIGHT = 100;
@@ -11,6 +11,8 @@ const PAD = 30; // room at both ends so the larger glyph and the labels fit
 const SIZE = 22;
 const SIZE_LATEST = 30;
 const GAP = 28; // least distance between two run centres
+const FAR = 3; // a next run further away than this many window widths is drawn as an arrow
+const TAIL = 100; // room kept at the right for the arrow and its label
 
 function tickLabel(t, step) {
   if (step >= DAY) return shortDate(t);
@@ -27,11 +29,14 @@ export function drawTrack(wrap, policy, opts) {
   const runs = policy.history.map((r) => ({ ...r, t: Date.parse(r.at) }));
   const nextMs = policy.nextRun ? Date.parse(policy.nextRun) : null;
 
-  const times = [opts.nowMs, ...runs.map((r) => r.t)];
-  if (nextMs !== null) times.push(nextMs);
-  const [lo, hi] = timeWindow(times);
-  const x = linear(lo, hi, left, right);
-  const step = pickStep(hi - lo, right - left);
+  // The window is built from "now" and the runs only. A next run far outside it does not stretch
+  // the axis; it is drawn as an arrow at the right edge instead.
+  const base = [opts.nowMs, ...runs.map((r) => r.t)];
+  let [lo, hi] = timeWindow(base);
+  const far = nextMs !== null && nextMs - hi > FAR * (hi - lo);
+  if (nextMs !== null && !far) [lo, hi] = timeWindow([...base, nextMs]);
+  const x = linear(lo, hi, left, far ? right - TAIL : right);
+  const step = pickStep(hi - lo, (far ? right - TAIL : right) - left);
 
   const svg = s('svg', {
     class: opts.animate ? 'track enter' : 'track',
@@ -46,7 +51,7 @@ export function drawTrack(wrap, policy, opts) {
 
   // "now" and "next" are labelled in the tick row, so ticks that would collide with them are dropped.
   const xNow = x(opts.nowMs);
-  const xNext = nextMs !== null ? x(nextMs) : null;
+  const xNext = nextMs !== null && !far ? x(nextMs) : null;
   const crowded = (px) => Math.abs(px - xNow) < 36 || (xNext !== null && Math.abs(px - xNext) < 36);
   for (const t of tickTimes(lo, hi, step)) {
     const px = x(t);
@@ -67,6 +72,13 @@ export function drawTrack(wrap, policy, opts) {
     svg.append(s('text', {
       class: 'marker-label', x: xNext, y: BASE + 24, 'text-anchor': close ? 'start' : 'middle',
     }, 'next'));
+  } else if (far) {
+    const edge = right + 8;
+    svg.append(s('path', { class: 'next-arrow', d: `M${edge - 8} ${BASE - 6} L${edge} ${BASE} L${edge - 8} ${BASE + 6}` }));
+    svg.append(s('g', { 'aria-hidden': 'true', transform: `translate(${right - SIZE / 2} ${BASE - 8 - SIZE})` }, glyph('next', SIZE)));
+    svg.append(s('text', {
+      class: 'marker-label', x: right + 12, y: BASE + 24, 'text-anchor': 'end',
+    }, `next ${relative(nextMs, opts.nowMs)}`));
   }
 
   if (runs.length === 0) {

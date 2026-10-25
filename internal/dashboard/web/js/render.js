@@ -3,7 +3,7 @@ import { h, s } from './dom.js';
 import { glyph, VERDICT_GLYPH } from './glyphs.js';
 import { drawTrack } from './timeline.js';
 import { absolute, bytes, count, duration, relative } from './format.js';
-import { headline, PHASE_TEXT, RUN_TEXT, VERDICT_TEXT, VERDICT_WORD } from './copy.js';
+import { failureSummary, headline, PHASE_TEXT, runText, verdictText, VERDICT_WORD } from './copy.js';
 
 // The run a person picked on each track, so a refresh does not lose their place.
 const selection = new Map();
@@ -36,7 +36,8 @@ function facts(p, nowMs) {
 function describeRun(p, run) {
   const latest = p.history.length > 0 && run.runID === p.history[p.history.length - 1].runID;
   const lv = p.lastVerification;
-  const parts = [h('span', { class: 'when' }, `Run finished ${absolute(Date.parse(run.at))}. `), RUN_TEXT[run.state]];
+  const reason = latest && lv && run.objectKey === lv.objectKey ? lv.reason || '' : '';
+  const parts = [h('span', { class: 'when' }, `Run finished ${absolute(Date.parse(run.at))}. `), runText(run.state, reason)];
   if (latest && lv && lv.restoreDurationSeconds && run.objectKey === lv.objectKey) {
     parts.push(` The restore took ${duration(lv.restoreDurationSeconds)}.`);
   }
@@ -50,15 +51,15 @@ function whyBlock(p) {
   const hint = h('p', null, 'To see the events for this policy, run ',
     h('code', null, `kubectl describe backuppolicy ${p.name} -n ${p.namespace}`), '.');
   if (p.verdict === 'failed' && lv) {
-    const checks = lv.failedChecks || [];
+    const f = failureSummary(lv);
     return h('div', { class: 'why' },
       h('h3', null, 'What failed'),
-      checks.length > 0
-        ? [h('p', null, `${count(checks.length, 'check', 'checks')} did not pass:`),
-          h('ul', null, checks.map((c) => h('li', null, h('code', null, c))))]
-        : h('p', null, 'The restore check failed, but no check name was recorded.'),
-      lv.message ? h('p', null, lv.message) : null,
-      checks.length === 0 ? hint : null);
+      f.checks.length > 0
+        ? [h('p', null, `${count(f.checks.length, 'check', 'checks')} did not pass:`),
+          h('ul', null, f.checks.map((c) => h('li', null, h('code', null, c))))]
+        : h('p', null, f.main),
+      f.detail ? h('p', null, f.detail) : null,
+      f.showHint ? hint : null);
   }
   if (p.verdict === 'backup-failed' && lb) {
     return h('div', { class: 'why' },
@@ -98,7 +99,7 @@ function policySection(p, index, nowMs) {
     s('svg', { class: 'big', viewBox: '0 0 56 40', width: 56, height: 40, 'aria-hidden': 'true' },
       glyph(VERDICT_GLYPH[p.verdict], 56, 6)),
     h('p', { class: 'verdict-word' }, VERDICT_WORD[p.verdict]),
-    h('p', { class: 'verdict-text' }, VERDICT_TEXT[p.verdict]),
+    h('p', { class: 'verdict-text' }, verdictText(p.verdict, p.lastVerification && p.lastVerification.reason)),
     p.phase !== 'Idle' ? h('p', { class: 'verdict-phase' }, PHASE_TEXT[p.phase] || p.phase) : null);
 
   const meta = h('p', { class: 'meta' },
@@ -131,7 +132,7 @@ function policySection(p, index, nowMs) {
     index,
     animate,
     selectedID: selection.get(key),
-    describe: (run) => `${absolute(Date.parse(run.at))}: ${RUN_TEXT[run.state]}`,
+    describe: (run) => `${absolute(Date.parse(run.at))}: ${runText(run.state, '')}`,
     onSelect: (run, byPerson) => {
       if (byPerson) selection.set(key, run.runID);
       showRun(run, byPerson);

@@ -284,3 +284,33 @@ func TestEmptyResponseUsesEmptyArrays(t *testing.T) {
 		t.Fatalf("history should be an empty array, got %s", withPolicy)
 	}
 }
+
+func TestVerificationReasonComesFromTheFalseCondition(t *testing.T) {
+	now := time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
+	withCondition := func(status metav1.ConditionStatus, reason string, result backupv1alpha1.VerificationResultType) backupv1alpha1.BackupPolicy {
+		return newPolicy("p", func(bp *backupv1alpha1.BackupPolicy) {
+			bp.Status.LastVerification = &backupv1alpha1.VerificationStatus{Result: result, ObjectKey: "k"}
+			bp.Status.Conditions = []metav1.Condition{{
+				Type: backupv1alpha1.ConditionRestoreVerified, Status: status, Reason: reason,
+			}}
+		})
+	}
+	cases := []struct {
+		name string
+		bp   backupv1alpha1.BackupPolicy
+		want string
+	}{
+		{"failed with a reason", withCondition(metav1.ConditionFalse, backupv1alpha1.ReasonChecksumMismatch, backupv1alpha1.VerificationFailed), backupv1alpha1.ReasonChecksumMismatch},
+		{"passed run ignores the condition", withCondition(metav1.ConditionTrue, "VerificationPassed", backupv1alpha1.VerificationPassed), ""},
+		{"failed but condition not False", withCondition(metav1.ConditionUnknown, "NoRunYet", backupv1alpha1.VerificationFailed), ""},
+		{"failed without any condition", newPolicy("q", func(bp *backupv1alpha1.BackupPolicy) {
+			bp.Status.LastVerification = &backupv1alpha1.VerificationStatus{Result: backupv1alpha1.VerificationFailed}
+		}), ""},
+	}
+	for _, tc := range cases {
+		got := BuildResponse([]backupv1alpha1.BackupPolicy{tc.bp}, now).Policies[0].LastVerification.Reason
+		if got != tc.want {
+			t.Errorf("%s: reason = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
