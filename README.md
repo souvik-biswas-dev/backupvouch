@@ -93,7 +93,7 @@ The operator runs Jobs with a fixed non-root user, a read-only root filesystem a
 
 ## How this differs from other tools
 
-BackupVouch is not the first tool in this space. Backup tools such as Velero, CloudNativePG and K8up take or restore backups, and other projects already verify backups made by other tools. BackupVouch's narrower idea is one Kubernetes resource that takes the PostgreSQL backup and proves it, with a small codebase and no dependency on another backup tool. The comparison table is in [docs/SPEC.md](docs/SPEC.md); it was written from memory and is being checked against each project's current documentation.
+BackupVouch is not the first tool in this space. Velero, CloudNativePG and K8up take or restore backups, but their documentation does not describe a scheduled restore-and-check of the data (K8up's `Check` tests the integrity of its restic repository, not a restore). FireDrill verifies backups made by other tools, and does much more on the verification side (signed evidence, RTO and RPO targets), but it does not take backups. BackupVouch's narrower idea is one Kubernetes resource that takes the PostgreSQL backup and proves it, with a small codebase and no other backup tool. The table, with the date it was checked, is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Limitations
 
@@ -105,4 +105,4 @@ Run `make fmt && make verify` before opening a pull request. See [docs/TESTING.m
 
 ## License
 
-Apache-2.0 is intended: the source files carry the Apache-2.0 header. The `LICENSE` file is still to be added before the first release.
+Apache-2.0, see [LICENSE](LICENSE).

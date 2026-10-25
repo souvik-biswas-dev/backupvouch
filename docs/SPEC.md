@@ -53,20 +53,19 @@ Small teams running PostgreSQL on Kubernetes (including k3s and kind) who want e
 
 ## Comparison with similar tools
 
-All entries below are from memory and must be checked against current documentation before the README makes any claim.
+Checked on 2026-10-25 against each project's current documentation (README, pkg.go.dev page or documentation site). "Not found" means the documentation I read does not describe the feature; it does not prove the feature is absent. Re-check before quoting this table elsewhere.
 
-| Tool | Focus | Automatic restore verification |
-|---|---|---|
-| Velero | cluster resources and volume backup and restore | not built in (verify) |
-| CloudNativePG | running PostgreSQL on Kubernetes, with backup and recovery | restore testing left to the user (verify) |
-| K8up | restic-based backups of volumes and databases | not built in (verify) |
-| FireDrill (github.com/kirilurbonas/FireDrill) | verification layer over backups made by other tools (Postgres, MySQL, Velero), with an operator that runs drills on a schedule and measures restore time | yes, this is its purpose (verify) |
+| Tool | What it is | Takes the backup itself | Restores it on a schedule and checks the data |
+|---|---|---|---|
+| Velero | Backup and restore of Kubernetes objects and persistent volumes. Backups, schedules and restores are custom resources; restore can remap namespaces and run restore hooks | yes (cluster objects and volume snapshots, not a database dump) | not described in its documentation; a restore is something you run |
+| CloudNativePG | An operator that runs PostgreSQL on Kubernetes. Base backups (object store or volume snapshots), scheduled backups and recovery into a new cluster, including point-in-time recovery | yes, for the clusters it runs | not described in its documentation; recovery is a bootstrap method you apply, and its docs leave verifying the result to you |
+| K8up | A restic-based backup operator for PVCs and applications, with `Backup`, `Schedule`, `Restore`, `Check`, `Prune` and `Archive` resources and a Prometheus endpoint | yes (restic snapshots) | not found. Its `Check` job tests the integrity of the restic repository, which is not a restore of your data |
+| FireDrill (github.com/kirilurbonas/FireDrill) | A verification layer over backups made by other tools. Restores a real backup into a disposable sandbox, checks the data, measures restore time against RTO and RPO targets, and writes signed evidence. Postgres, MySQL and Velero drills; a CLI and a Kubernetes operator with scheduled drills. Apache-2.0 | no, "it does not back anything up" by design | yes, this is its purpose |
 
-BackupVouch's difference is that **verification is the product**: a backup is only counted once it has been restored and checked. FireDrill already works in this space, so BackupVouch does not claim to be the first. Its intended difference is narrower: one Kubernetes resource that **takes the backup and proves it**, with a small, readable codebase and no dependency on another backup tool. Compare features with FireDrill's current README before publishing any claim.
+FireDrill is clearly further along on verification than BackupVouch: signed audit evidence, RTO and RPO targets, a ransomware canary check, compliance-control export and Slack notifications. BackupVouch does not try to match that. Its narrower idea is **one Kubernetes resource that takes the PostgreSQL backup and proves it**, with a small, readable codebase and no other backup tool needed. Pick FireDrill if you already have backups from another tool and need audit-grade evidence. Pick BackupVouch if you want one small operator that does both steps for PostgreSQL and nothing else.
 
 ## Open questions
 
-- Which license (Apache-2.0 suggested).
-- How BackupVouch is positioned next to FireDrill (see the comparison above), and whether any part of the work is better contributed upstream.
+- Whether any part of the work is better contributed to FireDrill than built here (the comparison above is the current answer: they solve different halves).
 - Whether to support retention by age as well as count.
 - Whether the dashboard (optional) is worth including in v0.1.
