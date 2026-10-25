@@ -43,15 +43,15 @@ const (
 const (
 	// AnnotationReverify triggers a manual re-verification of the newest backup.
 	// Its value is a Unix timestamp in seconds.
-	AnnotationReverify = "backupvouch.dev/reverify"
+	AnnotationReverify = "backupvouch.pages.dev/reverify"
 
 	// FinalizerName is set on every BackupPolicy to clean up Jobs on delete.
-	FinalizerName = "backup.backupvouch.dev/finalizer"
+	FinalizerName = "backup.backupvouch.pages.dev/finalizer"
 
 	// Labels set on Jobs and Pods, see docs/ARCHITECTURE.md.
-	LabelPolicy    = "backupvouch.dev/policy"
-	LabelRunID     = "backupvouch.dev/run-id"
-	LabelRole      = "backupvouch.dev/role"
+	LabelPolicy    = "backupvouch.pages.dev/policy"
+	LabelRunID     = "backupvouch.pages.dev/run-id"
+	LabelRole      = "backupvouch.pages.dev/role"
 	LabelManagedBy = "app.kubernetes.io/managed-by"
 
 	// Values of LabelRole.

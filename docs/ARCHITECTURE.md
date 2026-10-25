@@ -26,7 +26,7 @@ flowchart LR
 
 | Item | Value |
 |---|---|
-| Labels on Jobs and Pods | `backupvouch.dev/policy=<name>`, `backupvouch.dev/run-id=<runID>`, `backupvouch.dev/role=backup`, `verify` or `prune`, `app.kubernetes.io/managed-by=backupvouch` |
+| Labels on Jobs and Pods | `backupvouch.pages.dev/policy=<name>`, `backupvouch.pages.dev/run-id=<runID>`, `backupvouch.pages.dev/role=backup`, `verify` or `prune`, `app.kubernetes.io/managed-by=backupvouch` |
 | Job names | `<policy>-backup-<runID>`, `<policy>-verify-<runID>`, `<policy>-prune-<runID>` |
 | `runID` | the scheduled time as a Unix timestamp (10 digits); for a manual re-verification, the value of the annotation |
 | Object key | `<storage.prefix><scheduled time as UTC, e.g. 2026-10-24T02-00-00Z>.dump`, so a retried backup overwrites its own object |
@@ -82,7 +82,7 @@ stateDiagram-v2
 4. `runID` comes from the scheduled time, never from "now". If the controller crashes after creating a Job but before recording it, the next reconcile computes the same name, the create returns `AlreadyExists`, and it continues. Creating a Job that already exists is a no-op, so there are never duplicates.
 5. Job outcome is read from the Job conditions and from the termination message (JSON) of the newest terminated Pod of the Job (Pods are found by the `batch.kubernetes.io/job-name` label). See "How failures are detected".
 6. Everything the controller needs to resume is in the resource status and the Jobs themselves. The controller keeps no in-memory state across reconciles. Metrics are recomputed from status on every reconcile, and a policy's series are removed when it is deleted.
-7. Retention runs in a Prune Job after a successful verification (or after a successful backup when verification is disabled). It keeps the newest `keepLast` objects and never deletes the object in `status.lastVerification.objectKey` while that verification passed. A prune failure produces an event, not a condition. The prune runner reports `{deleted, kept}` in its termination message, but the controller does not read it in v0.1: the `RetentionPruned` event carries no counts. Read them with `kubectl get pod -l backupvouch.dev/role=prune -o jsonpath='{.items[*].status.containerStatuses[*].state.terminated.message}'`.
+7. Retention runs in a Prune Job after a successful verification (or after a successful backup when verification is disabled). It keeps the newest `keepLast` objects and never deletes the object in `status.lastVerification.objectKey` while that verification passed. A prune failure produces an event, not a condition. The prune runner reports `{deleted, kept}` in its termination message, but the controller does not read it in v0.1: the `RetentionPruned` event carries no counts. Read them with `kubectl get pod -l backupvouch.pages.dev/role=prune -o jsonpath='{.items[*].status.containerStatuses[*].state.terminated.message}'`.
 8. Verification results are reduced to a fixed vocabulary (D11). A verify reason that is not on the list becomes `RestoreFailed`. On failure `lastVerification.message` and the `VerificationFailed` event carry the failed check messages, or a fixed text for the reason when no check ran (a checksum failure restores nothing, so there is no check to name). Restore time is rounded up to whole seconds, and failed runs store it too. If a verify Job disappears while a run is verifying, the controller recreates it from `status.lastBackup`.
 9. The controller keeps the Jobs of the last 3 runs (after failed runs too) so their logs stay readable, and deletes older ones (background propagation so Pods go too). Jobs have no `ttlSecondsAfterFinished`, because the controller must read the Pod's termination message first.
 9. On deletion a finalizer removes owned Jobs. Stored backups are kept unless the user opts in to deleting them (post-v1).
@@ -162,7 +162,7 @@ Size and content rules for the runner:
 
 ## Recommended NetworkPolicy for Jobs
 
-Allow egress only to DNS and to the storage endpoint, plus egress to the source database for backup Jobs. Verification and prune Jobs need no database access. Select Jobs with the label `backupvouch.dev/role`.
+Allow egress only to DNS and to the storage endpoint, plus egress to the source database for backup Jobs. Verification and prune Jobs need no database access. Select Jobs with the label `backupvouch.pages.dev/role`.
 
 ## Dashboard
 

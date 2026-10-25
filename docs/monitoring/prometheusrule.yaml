@@ -1,0 +1,47 @@
+# Alert rules for BackupVouch, as a prometheus-operator PrometheusRule.
+# Apply with: kubectl apply -f docs/monitoring/prometheusrule.yaml
+# Without prometheus-operator, copy the `groups:` block into your own rule file.
+# The 36 hour limits suit a daily schedule; change them to about 1.5 times your schedule interval.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backupvouch
+  namespace: backupvouch-system
+  labels:
+    app.kubernetes.io/name: backupvouch
+spec:
+  groups:
+    - name: backupvouch
+      rules:
+        - alert: BackupVouchVerificationFailed
+          expr: backupvouch_verification_success == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "The newest backup of {{ $labels.namespace }}/{{ $labels.policy }} failed its restore check"
+            description: "Do not rely on this backup. Run: kubectl describe backuppolicy {{ $labels.policy }} -n {{ $labels.namespace }} (see docs/RUNBOOK.md)."
+        - alert: BackupVouchVerificationStale
+          expr: time() - backupvouch_last_verified_timestamp_seconds > 36 * 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No backup of {{ $labels.namespace }}/{{ $labels.policy }} has passed a restore check for over 36 hours"
+            description: "Either backups or verifications are not finishing, or verify is disabled. See docs/RUNBOOK.md."
+        - alert: BackupVouchBackupStale
+          expr: time() - backupvouch_last_backup_timestamp_seconds > 36 * 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No successful backup of {{ $labels.namespace }}/{{ $labels.policy }} for over 36 hours"
+            description: "Check the backup Job and the source database. See docs/RUNBOOK.md."
+        - alert: BackupVouchRestoreSlow
+          expr: backupvouch_restore_duration_seconds > 1800
+          for: 0m
+          labels:
+            severity: info
+          annotations:
+            summary: "Restoring {{ $labels.namespace }}/{{ $labels.policy }} took more than 30 minutes"
+            description: "Your real recovery time is at least this long. Compare it with your recovery time target."

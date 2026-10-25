@@ -41,7 +41,7 @@ The point of the project: show that a bad backup is caught.
 1. Deploy an S3 store and a Postgres with seed data, apply a BackupPolicy.
 2. Wait for `RestoreVerified=True`.
 3. Corrupt the stored dump (truncate it, or overwrite bytes).
-4. Re-verify the corrupted object with the annotation `backupvouch.dev/reverify=<unix seconds>`. Waiting for the next scheduled run would not work, because that run takes a fresh, good backup.
+4. Re-verify the corrupted object with the annotation `backupvouch.pages.dev/reverify=<unix seconds>`. Waiting for the next scheduled run would not work, because that run takes a fresh, good backup.
 5. Expect `RestoreVerified=False` with a reason such as `ChecksumMismatch` or `RestoreFailed`, an event, and `backupvouch_verification_success` at 0.
 
 `hack/e2e.sh` exits non-zero if either the healthy case or the sabotaged case behaves differently from this.
@@ -52,7 +52,7 @@ The point of the project: show that a bad backup is caught.
 2. Deploys the operator with `make deploy` and switches its metrics endpoint to plain HTTP so the script can read it through the API server's pod proxy. The default install stays on HTTPS. `config/manager/kustomization.yaml` is restored when the script ends.
 3. Deploys SeaweedFS as the S3 store (it creates the bucket at start, and the script then makes one signed request to prove the credentials work) and a Postgres 16 with a `users` table of three rows (`config/samples/demo/`), then applies `config/samples/demo/policy.yaml`.
 4. **Healthy case.** Waits for `RestoreVerified=True`, then checks `lastVerification.result=Passed`, a stored object key and checksum, the run returning to `Idle`, the metric `backupvouch_verification_success 1` and a `VerificationPassed` event. If the backup or the verification fails here, the script stops at once and prints the reason.
-5. **Sabotage.** Overwrites the stored dump with text with a signed S3 `PUT` from a one-off `curlimages/curl` Pod, annotates the policy with `backupvouch.dev/reverify=<unix seconds>`, waits for `RestoreVerified=False`, and checks reason `ChecksumMismatch`, `lastVerification.result=Failed` for the same object, `BackupReady` still `True`, a `VerificationFailed` event and the metric at 0.
+5. **Sabotage.** Overwrites the stored dump with text with a signed S3 `PUT` from a one-off `curlimages/curl` Pod, annotates the policy with `backupvouch.pages.dev/reverify=<unix seconds>`, waits for `RestoreVerified=False`, and checks reason `ChecksumMismatch`, `lastVerification.result=Failed` for the same object, `BackupReady` still `True`, a `VerificationFailed` event and the metric at 0.
 6. Exit code 0 only if every check holds. On any failure it prints the policy YAML, Jobs, Pods, recent events, the operator log and the runner logs, then deletes the cluster (unless `E2E_KEEP_CLUSTER=true`, or the cluster already existed).
 
 The steps are functions in `hack/lib.sh` (`stage_preflight`, `stage_images_and_cluster`, `stage_operator`, `stage_fixtures`, `stage_healthy`, `stage_sabotage`, `stage_final`). `hack/e2e.sh` is only the list of calls, and `hack/demo.sh` calls the same functions with commentary, so the demo cannot drift away from the test.
@@ -103,7 +103,7 @@ Recorded with `make demo-transcript` on 2026-10-25. The image build and cluster 
 
 $ cat config/samples/demo/policy.yaml
 # The BackupPolicy used by hack/e2e.sh and hack/demo.sh. The schedule has a past occurrence, so the first run starts at once.
-apiVersion: backup.backupvouch.dev/v1alpha1
+apiVersion: backup.backupvouch.pages.dev/v1alpha1
 kind: BackupPolicy
 metadata:
   name: app-db
@@ -139,7 +139,7 @@ spec:
       - name: users-count
         sql: "SELECT count(*) FROM users"
         expect: "3"
-backuppolicy.backup.backupvouch.dev/app-db created
+backuppolicy.backup.backupvouch.pages.dev/app-db created
 ok: RestoreVerified=True
 ok: run finished (phase Idle after the prune Job)
 ok: metric backupvouch_verification_success 1
@@ -156,19 +156,19 @@ app-db   0 2 * * *   Idle    7s            True       1              10s
 $ kubectl get backuppolicy app-db -o yaml   # status only
 status:
   conditions:
-  - lastTransitionTime: "2026-10-25T04:54:53Z"
+  - lastTransitionTime: "2026-10-25T08:49:48Z"
     message: spec is valid
     observedGeneration: 1
     reason: SpecValid
     status: "True"
     type: SpecValid
-  - lastTransitionTime: "2026-10-25T04:54:56Z"
+  - lastTransitionTime: "2026-10-25T08:49:51Z"
     message: backup completed successfully
     observedGeneration: 1
     reason: BackupSucceeded
     status: "True"
     type: BackupReady
-  - lastTransitionTime: "2026-10-25T04:54:59Z"
+  - lastTransitionTime: "2026-10-25T08:49:54Z"
     message: restore verification passed all checks
     observedGeneration: 1
     reason: VerificationPassed
@@ -178,25 +178,25 @@ status:
   - backupResult: Succeeded
     objectKey: app/2026-10-25T02-00-00Z.dump
     runID: 1792893600
-    time: "2026-10-25T04:55:02Z"
+    time: "2026-10-25T08:49:57Z"
     verificationResult: Passed
   lastBackup:
     objectKey: app/2026-10-25T02-00-00Z.dump
     result: Succeeded
-    sha256: 8cb44f7beee61dfdfa1aed0834c02d35b4a1baa39f9497532e85faa1f37b1dca
+    sha256: d15d41d34dab557ea601d8bfa7cdc77cfddea46128813a46a53c3f7ad398cc20
     sizeBytes: 2894
-    time: "2026-10-25T04:54:56Z"
+    time: "2026-10-25T08:49:51Z"
   lastRunID: 1792893600
   lastVerification:
     objectKey: app/2026-10-25T02-00-00Z.dump
     restoreDurationSeconds: 1
     result: Passed
-    time: "2026-10-25T04:54:59Z"
+    time: "2026-10-25T08:49:54Z"
   phase: Idle
 
 $ kubectl get events --field-selector involvedObject.name=app-db
 LAST SEEN   TYPE     REASON                OBJECT                MESSAGE
-9s          Normal   BackupStarted         backuppolicy/app-db   Started scheduled backup
+10s         Normal   BackupStarted         backuppolicy/app-db   Started scheduled backup
 6s          Normal   BackupSucceeded       backuppolicy/app-db   Backup created successfully
 6s          Normal   VerificationStarted   backuppolicy/app-db   Started verification job
 3s          Normal   VerificationPassed    backuppolicy/app-db   Verification passed successfully
@@ -207,10 +207,10 @@ LAST SEEN   TYPE     REASON                OBJECT                MESSAGE
 # Now we simulate bit rot: the stored backup is overwritten with garbage. The backup job succeeded earlier, so a tool that only checks the backup job would still say everything is fine.
 overwriting s3://backups/app/2026-10-25T02-00-00Z.dump with garbage
 
-# We ask BackupVouch to check the stored backup again (annotation backupvouch.dev/reverify). A scheduled run would take a fresh good backup, so it would not show the problem.
+# We ask BackupVouch to check the stored backup again (annotation backupvouch.pages.dev/reverify). A scheduled run would take a fresh good backup, so it would not show the problem.
 
-$ kubectl annotate backuppolicy app-db backupvouch.dev/reverify=1792904107
-backuppolicy.backup.backupvouch.dev/app-db annotated
+$ kubectl annotate backuppolicy app-db backupvouch.pages.dev/reverify=1792918202
+backuppolicy.backup.backupvouch.pages.dev/app-db annotated
 ok: controller acted on the annotation
 ok: RestoreVerified=False
 ok: run finished (phase Idle)
@@ -228,19 +228,19 @@ app-db   0 2 * * *   Idle    27s           False                     30s
 $ kubectl get backuppolicy app-db -o yaml   # status only
 status:
   conditions:
-  - lastTransitionTime: "2026-10-25T04:54:53Z"
+  - lastTransitionTime: "2026-10-25T08:49:48Z"
     message: spec is valid
     observedGeneration: 1
     reason: SpecValid
     status: "True"
     type: SpecValid
-  - lastTransitionTime: "2026-10-25T04:54:56Z"
+  - lastTransitionTime: "2026-10-25T08:49:51Z"
     message: backup completed successfully
     observedGeneration: 1
     reason: BackupSucceeded
     status: "True"
     type: BackupReady
-  - lastTransitionTime: "2026-10-25T04:55:21Z"
+  - lastTransitionTime: "2026-10-25T08:50:15Z"
     message: the stored backup does not match the checksum recorded when it was taken
     observedGeneration: 1
     reason: ChecksumMismatch
@@ -249,27 +249,27 @@ status:
   history:
   - backupResult: Succeeded
     objectKey: app/2026-10-25T02-00-00Z.dump
-    runID: 1792904107
-    time: "2026-10-25T04:55:21Z"
+    runID: 1792918202
+    time: "2026-10-25T08:50:15Z"
     verificationResult: Failed
   - backupResult: Succeeded
     objectKey: app/2026-10-25T02-00-00Z.dump
     runID: 1792893600
-    time: "2026-10-25T04:55:02Z"
+    time: "2026-10-25T08:49:57Z"
     verificationResult: Passed
   lastBackup:
     objectKey: app/2026-10-25T02-00-00Z.dump
     result: Succeeded
-    sha256: 8cb44f7beee61dfdfa1aed0834c02d35b4a1baa39f9497532e85faa1f37b1dca
+    sha256: d15d41d34dab557ea601d8bfa7cdc77cfddea46128813a46a53c3f7ad398cc20
     sizeBytes: 2894
-    time: "2026-10-25T04:54:56Z"
-  lastReverifyID: 1792904107
+    time: "2026-10-25T08:49:51Z"
+  lastReverifyID: 1792918202
   lastRunID: 1792893600
   lastVerification:
     message: the stored backup does not match the checksum recorded when it was taken
     objectKey: app/2026-10-25T02-00-00Z.dump
     result: Failed
-    time: "2026-10-25T04:55:21Z"
+    time: "2026-10-25T08:50:15Z"
   phase: Idle
 
 $ kubectl get events --field-selector involvedObject.name=app-db

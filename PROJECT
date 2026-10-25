@@ -3,7 +3,7 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.16.0
-domain: backupvouch.dev
+domain: backupvouch.pages.dev
 layout:
 - go.kubebuilder.io/v4
 projectName: backupvouch
@@ -13,7 +13,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: backupvouch.dev
+  domain: backupvouch.pages.dev
   group: backup
   kind: BackupPolicy
   path: github.com/souvik-biswas-dev/backupvouch/api/v1alpha1

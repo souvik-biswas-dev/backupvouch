@@ -1,5 +1,5 @@
 # The BackupPolicy used by hack/e2e.sh and hack/demo.sh. The schedule has a past occurrence, so the first run starts at once.
-apiVersion: backup.backupvouch.dev/v1alpha1
+apiVersion: backup.backupvouch.pages.dev/v1alpha1
 kind: BackupPolicy
 metadata:
   name: app-db

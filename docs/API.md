@@ -1,11 +1,11 @@
 # API reference: BackupPolicy
 
-Group `backup.backupvouch.dev`, version `v1alpha1`, kind `BackupPolicy`, short name `bp`, namespaced. Field names here are final for v0.1.
+Group `backup.backupvouch.pages.dev`, version `v1alpha1`, kind `BackupPolicy`, short name `bp`, namespaced. Field names here are final for v0.1.
 
 ## Example
 
 ```yaml
-apiVersion: backup.backupvouch.dev/v1alpha1
+apiVersion: backup.backupvouch.pages.dev/v1alpha1
 kind: BackupPolicy
 metadata:
   name: app-db
@@ -50,7 +50,7 @@ spec:
 |---|---|---|---|
 | `schedule` | string | required | five-field cron expression |
 | `timeZone` | string | `UTC` | IANA time zone name |
-| `suspend` | bool | `false` | stops all new work. A run that is already in progress finishes. While suspended and idle, the controller does nothing else: no scheduled runs, no manual re-verification (the `backupvouch.dev/reverify` annotation is ignored until `suspend` is false again), and `BackupReady` and `RestoreVerified` are not created for a policy that never ran (`SpecValid` still is). Metrics and the dashboard keep showing the last status |
+| `suspend` | bool | `false` | stops all new work. A run that is already in progress finishes. While suspended and idle, the controller does nothing else: no scheduled runs, no manual re-verification (the `backupvouch.pages.dev/reverify` annotation is ignored until `suspend` is false again), and `BackupReady` and `RestoreVerified` are not created for a policy that never ran (`SpecValid` still is). Metrics and the dashboard keep showing the last status |
 | `source.engine` | enum | `postgres` | only `postgres` in v1 |
 | `source.host` | string | required | host or service name |
 | `source.port` | int | `5432` | 1-65535 |
@@ -87,7 +87,7 @@ The runner runs each check inside a read-only transaction with a statement timeo
 | `phase` | `Idle`, `BackingUp`, `Verifying`, or `Pruning` |
 | `currentRunID` | Unix timestamp (scheduled time) of the run in progress, empty when idle |
 | `lastRunID` | `runID` of the most recent run that was started; used with the schedule to decide whether a run is due |
-| `lastReverifyID` | the last value of the `backupvouch.dev/reverify` annotation that was acted on |
+| `lastReverifyID` | the last value of the `backupvouch.pages.dev/reverify` annotation that was acted on |
 | `lastBackup.time` | when the last backup finished |
 | `lastBackup.result` | `Succeeded` or `Failed` |
 | `lastBackup.objectKey`, `sizeBytes`, `sha256` | the stored artifact |
@@ -128,7 +128,7 @@ The controller only accepts a verification failure reason from the list above (`
 
 To re-check the newest stored backup without taking a new one (for example to detect bit rot, or in the sabotage demo), set an annotation with any new Unix timestamp:
 
-    kubectl annotate backuppolicy app-db backupvouch.dev/reverify="$(date +%s)" --overwrite
+    kubectl annotate backuppolicy app-db backupvouch.pages.dev/reverify="$(date +%s)" --overwrite
 
 When the policy is `Idle`, the controller creates a verification Job named `<policy>-verify-<value>` for `status.lastBackup`, records the value in `status.lastReverifyID`, and updates `lastVerification` and `RestoreVerified` as usual. The same value is never acted on twice.
 

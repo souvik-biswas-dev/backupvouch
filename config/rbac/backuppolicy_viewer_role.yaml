@@ -1,7 +1,7 @@
 # This rule is not used by the project backupvouch itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to backup.backupvouch.dev resources.
+# Grants read-only access to backup.backupvouch.pages.dev resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -14,7 +14,7 @@ metadata:
   name: backuppolicy-viewer-role
 rules:
 - apiGroups:
-  - backup.backupvouch.dev
+  - backup.backupvouch.pages.dev
   resources:
   - backuppolicies
   verbs:
@@ -22,7 +22,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - backup.backupvouch.dev
+  - backup.backupvouch.pages.dev
   resources:
   - backuppolicies/status
   verbs:

@@ -56,7 +56,7 @@ Short records of design choices. Add a new record when something changes.
 
 - **Context:** the working name `restoreguard` appears to be used by an existing backup auditing tool (verify), and a similar name causes confusion in searches.
 - **Decision:** the project is called BackupVouch (`backupvouch` in code, repository, images, and metrics). To vouch is to give a trusted guarantee, which is what the operator does for each backup.
-- **Consequences:** the API group is `backup.backupvouch.dev` and metrics start with `backupvouch_`. Availability of the name on GitHub, pkg.go.dev, and Artifact Hub must be checked before the first release.
+- **Consequences:** the API group is `backup.backupvouch.pages.dev` and metrics start with `backupvouch_`. Availability of the name on GitHub, pkg.go.dev, and Artifact Hub must be checked before the first release.
 
 ## D10: One run at a time, one catch-up, no automatic retry of a failed run
 
@@ -79,7 +79,7 @@ Short records of design choices. Add a new record when something changes.
 ## D13: Manual re-verification by annotation
 
 - **Context:** the sabotage demo corrupts a stored dump. If the demo waited for the next scheduled run, a fresh good backup would be taken and nothing would fail. Re-checking old backups for bit rot is also useful.
-- **Decision:** the annotation `backupvouch.dev/reverify=<unix seconds>` makes an idle policy verify `status.lastBackup` again. The handled value is stored in `status.lastReverifyID`.
+- **Decision:** the annotation `backupvouch.pages.dev/reverify=<unix seconds>` makes an idle policy verify `status.lastBackup` again. The handled value is stored in `status.lastReverifyID`.
 - **Consequences:** a small API surface that is not part of the spec, and the demo can run in seconds. The alternative (a `spec` field such as `verify.recheckInterval`) is left for later.
 
 ## D14: Runner images are allow-listed
@@ -138,3 +138,9 @@ Short records of design choices. Add a new record when something changes.
 - **Context:** the plan allowed up to two small libraries and required everything to be vendored and embedded.
 - **Decision:** none. The time scale, ticks and shapes are small plain ES modules; fonts are self-hosted woff2. Files are embedded with `go:embed`, and `.dockerignore` re-includes them.
 - **Consequences:** nothing to update or audit, and it works offline. Pure logic (scale, formatting, headline text) has node tests (`make dashboard-js-test`); drawing has none and needs a manual look.
+
+## D23: The API domain is backupvouch.pages.dev
+
+- **Context:** a Kubernetes API group should be a DNS name the project controls. The first choice, `backupvouch.dev`, would have cost money for a project with no users yet.
+- **Decision:** the API group is `backup.backupvouch.pages.dev`, a free Cloudflare Pages name for the project site (`site/`). The same domain prefixes the annotation `backupvouch.pages.dev/reverify`, the labels `backupvouch.pages.dev/policy`, `backupvouch.pages.dev/run-id` and `backupvouch.pages.dev/role`, and the finalizer.
+- **Consequences:** the rename breaks any BackupPolicy created under the old group (there were no users). A later move to a registered domain is another breaking change, so do it before a first stable release, never after.

@@ -1,4 +1,4 @@
-apiVersion: backup.backupvouch.dev/v1alpha1
+apiVersion: backup.backupvouch.pages.dev/v1alpha1
 kind: BackupPolicy
 metadata:
   labels:

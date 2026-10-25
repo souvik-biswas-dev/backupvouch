@@ -1,0 +1,55 @@
+@font-face { font-family: "Plex Sans"; src: url("/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Plex Sans"; src: url("/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Plex Mono"; src: url("/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+
+:root {
+  color-scheme: light;
+  --paper: #F5F7FA; --ink: #14212E; --teal: #0E7C73; --slate-text: #44566A; --mist: #C9D3DE; --fracture: #A82217;
+  --sans: "Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 1.0625rem/1.6 var(--sans); }
+a { color: var(--teal); text-underline-offset: 3px; }
+a:focus-visible, summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.wrap { max-width: 68rem; margin: 0 auto; padding: 0 1.25rem; }
+header.top { padding: 1.5rem 0; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+header.top img { height: 2.25rem; width: auto; display: block; }
+header.top nav { display: flex; gap: 1.25rem; font-size: .9375rem; }
+header.top nav a { color: var(--slate-text); }
+
+.hero { padding: 3.5rem 0 3rem; display: grid; gap: 2.5rem; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 60rem) { .hero { grid-template-columns: 1.05fr 1fr; gap: 3.5rem; padding: 5rem 0 4rem; } }
+h1 { font-size: clamp(2rem, 1.2rem + 3.6vw, 3.5rem); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 1.25rem; font-weight: 600; max-width: 18ch; }
+.lead { font-size: 1.25rem; color: var(--slate-text); max-width: 34rem; margin: 0 0 1.75rem; }
+.actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+.btn { display: inline-block; padding: .7rem 1.1rem; border: 2px solid var(--ink); color: var(--ink); text-decoration: none; font-weight: 600; background: transparent; }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn:hover { background: var(--teal); border-color: var(--teal); color: #fff; }
+.note { margin-top: 1.25rem; font-size: .9375rem; color: var(--slate-text); max-width: 34rem; }
+
+.evidence { display: grid; gap: 1rem; }
+.evidence figure { margin: 0; }
+.evidence figcaption { font-size: .9375rem; margin-bottom: .4rem; color: var(--slate-text); }
+.evidence figcaption b { color: var(--ink); }
+pre, code { font-family: var(--mono); font-size: .8125rem; }
+pre { margin: 0; padding: 1rem 1.1rem; background: #fff; border: 1px solid var(--mist); border-left: 5px solid var(--mist); overflow-x: auto; line-height: 1.55; }
+pre.ok { border-left-color: var(--teal); }
+pre.bad { border-left-color: var(--fracture); }
+
+section { padding: 3rem 0; border-top: 1px solid var(--mist); }
+h2 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 1rem; font-weight: 600; letter-spacing: -0.01em; }
+section p { max-width: 42rem; margin: 0 0 1rem; }
+ol.flow { list-style: none; padding: 0; margin: 1.5rem 0 0; display: grid; gap: 1.25rem; grid-template-columns: 1fr; counter-reset: s; }
+@media (min-width: 48rem) { ol.flow { grid-template-columns: repeat(4, 1fr); } }
+ol.flow li { counter-increment: s; padding-top: .9rem; border-top: 4px solid var(--teal); }
+ol.flow li::before { content: counter(s); display: block; font: 600 .875rem var(--mono); color: var(--slate-text); margin-bottom: .25rem; }
+ol.flow strong { display: block; margin-bottom: .2rem; }
+ol.flow span { color: var(--slate-text); font-size: .9375rem; }
+.cols { display: grid; gap: 2rem; grid-template-columns: 1fr; }
+@media (min-width: 52rem) { .cols { grid-template-columns: 1fr 1fr; } }
+ul.plain { padding-left: 1.2rem; margin: 0; max-width: 42rem; }
+ul.plain li { margin-bottom: .5rem; }
+footer { padding: 2rem 0 3rem; border-top: 1px solid var(--mist); color: var(--slate-text); font-size: .9375rem; }
+footer p { margin: 0 0 .4rem; }

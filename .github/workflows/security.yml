@@ -1,0 +1,58 @@
+name: Security scan
+
+# Scheduled and manual only, so a new vulnerability in a dependency never blocks an unrelated pull request.
+# A red run here means: look at the report and update the dependency or the base image.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  govulncheck:
+    name: Go vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  images:
+    name: Image vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Build the images
+        run: |
+          docker build -t backupvouch-controller:scan .
+          docker build -f Dockerfile.runner -t backupvouch-runner:scan .
+
+      # The scanner image is not pinned: this job only reports, it never publishes anything.
+      - name: Scan with Trivy (fixed HIGH and CRITICAL findings fail the run)
+        run: |
+          for image in backupvouch-controller:scan backupvouch-runner:scan; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+              image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL "${image}"
+          done

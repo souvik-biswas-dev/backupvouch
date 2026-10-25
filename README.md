@@ -7,6 +7,8 @@
 
 # BackupVouch
 
+Project site: https://backupvouch.pages.dev
+
 A Kubernetes operator that proves your database backups can be restored.
 
 BackupVouch runs PostgreSQL backups on a schedule, restores each one into a throwaway Postgres, runs the SQL checks you define, and reports the result through status conditions, events, Prometheus metrics and an optional read-only dashboard.
@@ -28,7 +30,7 @@ To install the operator in your own cluster, see [docs/INSTALL.md](docs/INSTALL.
 
 ## Example
 
-    apiVersion: backup.backupvouch.dev/v1alpha1
+    apiVersion: backup.backupvouch.pages.dev/v1alpha1
     kind: BackupPolicy
     metadata:
       name: app-db
@@ -87,9 +89,13 @@ The operator runs Jobs with a fixed non-root user, a read-only root filesystem a
 | [docs/INSTALL.md](docs/INSTALL.md) | install, runner image allow-list, dashboard, uninstall |
 | [docs/TESTING.md](docs/TESTING.md) | test layers, the sabotage demo, CI |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | what to do when something fails |
+| [docs/MONITORING.md](docs/MONITORING.md) | metrics, alert rules and a Grafana dashboard |
+| [docs/UPGRADING.md](docs/UPGRADING.md) | how to upgrade, and what is not tested yet |
+| [docs/RELEASE.md](docs/RELEASE.md) | the release steps, image signing, the project site |
 | [SECURITY.md](SECURITY.md) | threat model and permissions |
 | [docs/BRAND.md](docs/BRAND.md) | logo concept, palette, usage rules |
 | [AGENTS.md](AGENTS.md) | rules for AI assistants working in this repo |
+| [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) | how to contribute, what changed |
 
 ## How this differs from other tools
 
@@ -101,7 +107,7 @@ PostgreSQL only, and one Postgres major version (16) per runner image. No point-
 
 ## Contributing
 
-Run `make fmt && make verify` before opening a pull request. See [docs/TESTING.md](docs/TESTING.md) and [AGENTS.md](AGENTS.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `make fmt && make verify` before a pull request, and sign your commits.
 
 ## License
 

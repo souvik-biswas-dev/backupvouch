@@ -7,6 +7,10 @@ name: Publish images
 # runner image the operator uses by default. Images are linux/amd64 only; add
 # docker/setup-qemu-action and `platforms: linux/amd64,linux/arm64` for arm64 (slower, untested).
 #
+# Images are signed keyless with cosign (the signature is tied to this workflow and repository through
+# GitHub's OIDC token) and carry an SBOM and a build provenance attestation. docs/RELEASE.md shows how
+# to verify a signature. The cosign installer and the signing step are untested until the first tag.
+#
 # VERIFY: not run yet. New ghcr.io packages are private by default, make them public once in the
 # GitHub package settings. The action versions below were the second-newest releases when this was
 # written (pinned by commit SHA like the other workflows); let Dependabot bump them.
@@ -27,6 +31,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -67,6 +72,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push the operator image
+        id: operator
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -74,8 +80,11 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.images.outputs.controller }}
+          sbom: true
+          provenance: mode=max
 
       - name: Build and push the runner image
+        id: runner
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -83,3 +92,24 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.images.outputs.runner }}
+          sbom: true
+          provenance: mode=max
+
+      # Not pinned by SHA because the SHA could not be looked up when this was written; let Dependabot
+      # propose the pin after the first run.
+      - name: Install cosign
+        if: github.ref_type == 'tag'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the images (keyless)
+        if: github.ref_type == 'tag'
+        env:
+          CONTROLLER: ${{ steps.images.outputs.controller }}
+          RUNNER: ${{ steps.images.outputs.runner }}
+          CONTROLLER_DIGEST: ${{ steps.operator.outputs.digest }}
+          RUNNER_DIGEST: ${{ steps.runner.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [ -n "${CONTROLLER_DIGEST}" ] && [ -n "${RUNNER_DIGEST}" ] || { echo "missing image digest" >&2; exit 1; }
+          cosign sign --yes "${CONTROLLER%:*}@${CONTROLLER_DIGEST}"
+          cosign sign --yes "${RUNNER%:*}@${RUNNER_DIGEST}"

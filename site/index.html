@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>BackupVouch: a backup only counts once it has been restored and checked</title>
+<meta name="description" content="A Kubernetes operator that takes PostgreSQL backups, restores each one into a throwaway Postgres, runs your SQL checks, and reports the result.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="BackupVouch">
+<meta property="og:description" content="A backup only counts once it has been restored and checked.">
+<meta property="og:image" content="/social-preview.png">
+<link rel="preload" href="/fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a href="/" aria-label="BackupVouch home"><img src="/logo.svg" alt="BackupVouch" width="355" height="64"></a>
+    <nav aria-label="Project links">
+      <a href="https://github.com/souvik-biswas-dev/backupvouch">Source</a>
+      <a href="https://github.com/souvik-biswas-dev/backupvouch/blob/main/docs/INSTALL.md">Install</a>
+      <a href="https://github.com/souvik-biswas-dev/backupvouch/blob/main/docs/API.md">API</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>A backup only counts once it has been restored and checked.</h1>
+        <p class="lead">BackupVouch is a Kubernetes operator. It takes your PostgreSQL backups, restores each one into a throwaway database, runs the SQL checks you wrote, and tells you the result.</p>
+        <div class="actions">
+          <a class="btn primary" href="https://github.com/souvik-biswas-dev/backupvouch#quickstart">Run the demo</a>
+          <a class="btn" href="https://github.com/souvik-biswas-dev/backupvouch">Read the source</a>
+        </div>
+        <p class="note">Early alpha (API <code>v1alpha1</code>). It works end to end in a kind cluster and has not run in production yet. PostgreSQL only.</p>
+      </div>
+
+      <div class="evidence" aria-label="Output of the demo run">
+        <figure>
+          <figcaption><b>The backup job succeeded and the restore passed.</b></figcaption>
+          <pre class="ok">NAME     PHASE   LAST BACKUP   VERIFIED   RESTORE TIME
+app-db   Idle    7s            True       1</pre>
+        </figure>
+        <figure>
+          <figcaption><b>Then the stored file was corrupted.</b> The backup job had succeeded earlier, so a tool that only watches the job would still be green.</figcaption>
+          <pre class="bad">NAME     PHASE   LAST BACKUP   VERIFIED
+app-db   Idle    27s           False
+
+reason:  ChecksumMismatch
+message: the stored backup does not match the
+         checksum recorded when it was taken</pre>
+        </figure>
+      </div>
+    </div>
+
+    <section aria-labelledby="how">
+      <h2 id="how">What it does on every run</h2>
+      <p>You write one <code>BackupPolicy</code>: a schedule, your database, your S3 bucket and a few SQL checks. The operator does the rest and keeps the proof in the resource status.</p>
+      <ol class="flow">
+        <li><strong>Back up</strong><span>Dump the database and store it with its checksum.</span></li>
+        <li><strong>Restore</strong><span>Restore that stored copy into a scratch Postgres that is deleted afterwards.</span></li>
+        <li><strong>Check</strong><span>Run your SQL, for example &ldquo;the users table has 3 rows&rdquo;.</span></li>
+        <li><strong>Report</strong><span>Conditions, events, Prometheus metrics, and an optional read-only dashboard.</span></li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="why">
+      <h2 id="why">Why it exists</h2>
+      <div class="cols">
+        <div>
+          <p>Most teams find out a backup is broken during an outage. The job said success, but the file was truncated, a credential had changed, or a table was missing.</p>
+          <p>BackupVouch asks the question every night, before you need the answer: would last night&rsquo;s backup actually restore, and how long would it take?</p>
+        </div>
+        <ul class="plain">
+          <li>An alert on <code>backupvouch_verification_success == 0</code> the day a backup goes bad.</li>
+          <li>A measured restore time to plan around.</li>
+          <li>A plain answer for a manager or an auditor.</li>
+          <li>Failure messages that say what failed and never include row data.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section aria-labelledby="scope">
+      <h2 id="scope">What it is not</h2>
+      <p>It is not a database manager, and it does not do point-in-time recovery. It takes plain dumps and proves them. Tools such as CloudNativePG, Velero and K8up take or restore backups, and FireDrill verifies backups made by other tools. The comparison, with the date it was checked, is in the <a href="https://github.com/souvik-biswas-dev/backupvouch/blob/main/docs/SPEC.md">spec</a>.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>BackupVouch is open source under the Apache-2.0 license.</p>
+    <p><a href="https://github.com/souvik-biswas-dev/backupvouch">github.com/souvik-biswas-dev/backupvouch</a> &middot; <a href="https://github.com/souvik-biswas-dev/backupvouch/blob/main/SECURITY.md">Security</a></p>
+  </footer>
+</div>
+</body>
+</html>
