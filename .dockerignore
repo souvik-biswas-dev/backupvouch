@@ -12,3 +12,6 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include the files the dashboard embeds with go:embed (the build fails without them)
+!internal/dashboard/web/**

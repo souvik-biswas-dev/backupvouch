@@ -1,14 +1,8 @@
 # CONTEXT (handoff)
 
-<<<<<<< HEAD
-Last updated: 2026-10-25 (step 7 written, not yet run)
+Last updated: 2026-10-25 (step 7 done, step 8 written, not yet run)
 Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs PostgreSQL backups and verifies them by restoring into a scratch Postgres.
 Repo: github.com/souvik-biswas-dev/backupvouch. Step 6 was merged to `main` as PR #5 (merge commit `fedef4c`); in the screenshot taken just after, its CI checks were still running, so check the Actions tab. Step 7 is in `backupvouch-step7.zip`, not yet committed.
-=======
-Last updated: 2026-10-25 (step 6 written, not yet run)
-Project: BackupVouch, a Kubernetes operator in Go (kubebuilder v4) that runs PostgreSQL backups and verifies them by restoring into a scratch Postgres.
-Repo: github.com/souvik-biswas-dev/backupvouch, `main` was at commit `bd5d81a` when step 6 started. Step 6 is in the zip `backupvouch-step6.zip`, not yet committed.
->>>>>>> origin/main
 
 ## Status of the plan
 
@@ -21,14 +15,9 @@ Repo: github.com/souvik-biswas-dev/backupvouch, `main` was at commit `bd5d81a` w
 | 3 | scheduling and backup Job (`internal/schedule`, `internal/jobs`, `cmd/runner backup`, `Dockerfile.runner`) | done |
 | 4 | restore verification (`cmd/runner verify`, `internal/checks`, verify Job builder) | done |
 | 5 | controller (state machine, prune runner and builder, metrics, validation, envtest happy path) | done |
-<<<<<<< HEAD
 | 6 | tests and CI (failure-path envtest specs, `hack/e2e.sh`, Makefile `verify`/`e2e`, CI workflows, TESTING.md) | merged (PR #5). Locally `make verify` passed (all packages ok, controller coverage 75.2%). `make lint` failed with a Go toolchain mismatch (export data version, not a code finding) and `make e2e` stopped because kind was missing; the results after fixing those were not reported |
 | 7 | packaging and demo | written, NOT run: `hack/lib.sh`, `hack/demo.sh`, `config/samples/demo/`, `make build-installer`/`demo`, `docs/INSTALL.md`, `publish-images.yml` |
-=======
-| 6 | tests and CI | written, **not run**: failure-path envtest specs, `hack/e2e.sh`, Makefile `verify`/`e2e`/`docker-build-runner`, CI workflows, TESTING.md. Needs `make verify` and `make e2e` on your machine |
-| 7 | packaging and demo | not started (see "Left for step 7") |
->>>>>>> origin/main
-| 8 | optional dashboard | not started |
+| 8 | optional dashboard (`internal/dashboard`, `--dashboard-bind-address`, `docs/DESIGN.md`, D21, D22) | written, NOT run or compiled |
 | 9 | final docs and polish | not started |
 
 ## Last verified state (steps 0 to 5, by the author, before step 6)
@@ -48,7 +37,6 @@ Repo: github.com/souvik-biswas-dev/backupvouch, `main` was at commit `bd5d81a` w
 - `config/`: CRD, RBAC, manager, default kustomization (metrics over HTTPS), samples (full CR and an example Secrets file), scaffold network-policy and prometheus overlays (not enabled).
 - `assets/brand/`, all docs in `docs/`, `SECURITY.md`, `README.md` (still says "design phase"), workflows `lint.yml`, `test.yml`, `test-e2e.yml`.
 
-<<<<<<< HEAD
 Added in step 7: `hack/lib.sh` (the stages, shared), `hack/demo.sh`, `config/samples/demo/{s3,postgres,policy,kustomization}.yaml` (`s3.yaml` replaced `minio.yaml` in step 7a, see D20) (moved from `hack/e2e/`), Makefile `VERSION`, pinned default `IMG`, a checking `build-installer`, `demo`, `demo-clean`, `demo-transcript`, `docs/INSTALL.md`, `.github/workflows/publish-images.yml`, D19, `dist/` in `.gitignore`. `hack/e2e.sh` is now just the list of stage calls.
 
 Added in step 6: `internal/controller/backuppolicy_failures_test.go`, `hack/e2e.sh`, `hack/e2e/{minio,postgres,policy}.yaml`, Makefile targets `verify`, `e2e`, `docker-build-runner`, updated workflows, rewritten `docs/TESTING.md`, D17 and D18. Removed: scaffold `test/e2e` and `test/utils` and their Makefile targets (D17).
@@ -101,6 +89,12 @@ See `DECISIONS.md`, D1 to D19. D17: e2e is a bash script, the scaffold Ginkgo e2
 - The demo transcript in `docs/TESTING.md` is a marked placeholder; there was no cluster to record real output from. Run `make demo-transcript` and paste the result.
 - Open items a to i above are still open (the plan calls the fix for a to e "Step 6b"). The demo's failing case reports `ChecksumMismatch`; item d means `status.lastVerification.message` is only generic text for check failures. Item b (a deleted verify Job leaves the policy in `Verifying`) matters if you restart or delete things while presenting.
 
+## Step 8: what was done and how far it was checked
+
+- Added `internal/dashboard` (view.go, server.go, tests), the page in `internal/dashboard/web`, the flag in `cmd/main.go`, `.dockerignore` re-include for the embedded files (without it `docker build` would fail), Makefile targets `dashboard-fonts|assets|js-test|enable` and `dashboard`, `hack/dashboard-fonts.sh`, docs (DESIGN, D21, D22, INSTALL, SECURITY, ARCHITECTURE, TESTING).
+- Checked in the sandbox: `node --check` on all modules, 18 node tests pass, `bash -n` on the font script, `make -n` on the new targets, glyph shapes drawn and looked at. NOT checked: Go compile and tests (no Go here; `gofmt` not run, so run `make fmt`), any browser rendering, the fake-client behaviour (VERIFY in server_test.go), `kubectl port-forward` to a loopback-bound listener (VERIFY), fonts (not downloaded: no network).
+- Known quirk: the history record of a run with verification disabled copies the previous verification result, so the page can draw it as vouched. History has no per-run restore duration or failed check, so only the latest run shows them.
+
 ## Next
 
 1. Run the verify commands below and paste failures back (Fix prompt).
@@ -108,7 +102,14 @@ See `DECISIONS.md`, D1 to D19. D17: e2e is a bash script, the scaffold Ginkgo e2
 3. Consider Step 6b (open items a to e) before the optional dashboard and the final polish, since the demo shows failures and restarts.
 4. Step 8 (optional dashboard) or step 9 (final docs and polish: README still says "design phase").
 
-## To verify locally
+## To verify locally (step 8 first)
+
+    make dashboard-fonts                     # downloads fonts, then commit internal/dashboard/web/fonts
+    make verify                              # compiles and tests internal/dashboard (run make fmt if it reformats)
+    make dashboard-js-test
+    make demo && make dashboard-enable && make dashboard   # open http://localhost:9090, look at 1280 and 375 px, tab through a track
+
+## Earlier checks
 
     rm -rf hack/e2e                          # moved to config/samples/demo; unzip cannot delete
     chmod +x hack/e2e.sh hack/demo.sh
@@ -120,64 +121,3 @@ See `DECISIONS.md`, D1 to D19. D17: e2e is a bash script, the scaffold Ginkgo e2
     make demo-transcript                     # paste the real output into docs/TESTING.md
 
 If `make e2e` fails after the refactor, rerun with `E2E_KEEP_CLUSTER=true make e2e` and paste the output with the Fix prompt. `git diff config/rbac/role.yaml` should show no change after `make manifests`.
-=======
-Added in step 6: `internal/controller/backuppolicy_failures_test.go`, `hack/e2e.sh`, `hack/e2e/{minio,postgres,policy}.yaml`, Makefile targets `verify`, `e2e`, `docker-build-runner`, updated workflows, rewritten `docs/TESTING.md`, D17 and D18. Removed: scaffold `test/e2e` and `test/utils` and their Makefile targets (D17).
-
-## Where the code differs from the docs
-
-Fixed in step 6:
-
-1. Events RBAC was on the core `events` resource but the recorder (`mgr.GetEventRecorder`) uses `events.k8s.io`. Marker, `config/rbac/role.yaml` and SECURITY.md now say `events.k8s.io` (D18). VERIFY in the e2e run.
-2. The controller asked for `create` and `delete` on `backuppolicies`, which SECURITY.md did not justify and the code never uses. Removed.
-3. `failBackup` and `failVerify` deleted the Job without background propagation, which orphans the Pod for `batch/v1` Jobs. Fixed (D18).
-4. `Dockerfile.runner` built with `golang:1.24-alpine` while `go.mod` needs Go 1.26. Now `golang:1.26-alpine`.
-5. SECURITY.md said "RBAC (planned)", TESTING.md said "nothing has been run". Updated.
-
-Still open (code behaves differently from `docs/ARCHITECTURE.md` or `docs/API.md`, not changed because they are behaviour changes; each needs a small fix and a test):
-
-| # | Doc says | Code does | Impact |
-|---|---|---|---|
-| a | Metrics are recomputed from status on every reconcile (rule 6) | `UpdatePolicyMetrics` is called only when a backup or verification finishes | After an operator restart the gauges are missing until the next run; alerts on `backupvouch_last_verified_timestamp_seconds` can misfire. Fix: call it at the start of `Reconcile` |
-| b | The controller resumes at the correct stage after a crash (rule 4, 6) | `reconcileVerifying` only requeues when its Job is missing, while `BackingUp` and `Pruning` recreate it | A deleted verify Job leaves the policy in `Verifying` forever. Fix: recreate it from `status.lastBackup` |
-| c | The controller trusts only reasons from a fixed list (D11) | `isValidBackupFailureReason` guards backup, but a verify result's `reason` is copied as is | Unknown reasons become condition reasons. Fix: whitelist `ChecksumMismatch`, `RestoreFailed`, `CheckFailed`, `StorageUnreachable` |
-| d | `lastVerification.message` is a short reason, check messages are carried | Verify failures store the fixed text "one or more checks or restore operations failed"; per-check messages and the runner's message are dropped | Less help when a check fails. Fix: use the failed check messages |
-| e | The newest terminated Pod of a Job is read (rule 5) | `InspectJobPods` keeps the last terminated message in list order | With `backoffLimit: 1` a retry creates a second Pod; list order is not guaranteed. Fix: sort by creation time |
-| f | The Jobs of the last 3 runs are kept (rule 8) | Cleanup runs only at the end of `Pruning`, not after failed runs | Jobs of failed runs pile up until a run succeeds |
-| g | `suspend` pauses scheduling | A suspended Idle policy returns before `reconcileIdle`, so it also ignores the re-verify annotation and never initialises conditions | Minor, decide whether that is intended and document it |
-| h | Prune result `{deleted, kept}` (ARCHITECTURE) | The prune message is not read, events carry no counts | Minor |
-| i | `docs/API.md` conditions table lists only the False reasons | Code also sets True reasons `SpecValid`, `BackupSucceeded`, `VerificationPassed` and Unknown `NoRunYet` | Doc gap, see API.md note |
-
-## Known issues and VERIFY items
-
-- Step 6 code is unverified. Expect small fixes. The least certain parts: `markJobFailed` accepted by the envtest API server (strict Job status validation), `kubectl run -i` with piped stdin in `hack/e2e.sh`, the image tags `minio/minio:RELEASE.2025-04-22T22-12-26Z` and `minio/mc:RELEASE.2025-04-16T18-13-26Z`, `/bin/sh` in the MinIO image, kind `v0.30.0` in CI, events visible through `kubectl get events` after the RBAC change.
-- `config/rbac/role.yaml` was edited by hand. Run `make manifests`; if it differs, commit the generated file (CI fails on a diff otherwise).
-- `make lint` was never confirmed. Run it once.
-- `go mod tidy` was removed from CI (it hid an untidy go.mod). Run it locally before pushing.
-- Coverage gaps: `cmd/runner` 30.7% (the paths that need Postgres or S3 are covered only by e2e), `internal/checks` 48.2% (`RunCheck` needs a database), `api/v1alpha1` 36.2% (mostly generated deepcopy), `cmd/main.go` has no tests.
-- The scaffold's `config/manager/manager.yaml` has no `--allowed-runner-images`; only the default runner image is allowed (D14). A kind demo works because the runner is loaded under the default tag.
-- Comparisons with Velero, CloudNativePG, K8up and FireDrill in `SPEC.md` are from memory; check them before the README claims anything. Name availability on GitHub, pkg.go.dev and Artifact Hub is unchecked (D9).
-- Favicon should be looked at once in a real browser tab.
-- README still says "design phase" (step 9).
-
-## Decisions
-
-See `DECISIONS.md`, D1 to D18. D17: e2e is a bash script, the scaffold Ginkgo e2e is removed. D18: events RBAC group and Job deletion propagation.
-
-## Left for step 7 (so it does not redo step 6)
-
-Already present from step 6: `make docker-build-runner`, `make deploy`/`make e2e`, `hack/e2e/` fixtures (MinIO, Postgres with seed data, policy). Step 7 still has to do: an install kustomization and `make build-installer` check, `config/samples/demo/` (can reuse `hack/e2e/*.yaml`), `hack/demo.sh` with the narrated story, the optional ghcr.io publishing workflow, and the demo transcript in TESTING.md. Consider fixing open items a, b and c first, since the demo will show restarts and failures.
-
-## Next
-
-1. Run the verify commands below, paste failures back (Fix prompt).
-2. Commit step 6 (`git commit -s`, add `Assisted-by:` trailer per AGENTS.md).
-3. Step 7, or first the small fixes a to e above.
-
-## To verify locally
-
-    make manifests generate fmt vet test     # same as: make verify
-    git diff config/rbac/role.yaml           # should show no change after make manifests, else commit it
-    make lint
-    make e2e                                 # needs docker, kind, kubectl; paste the output if it fails
-    # to keep the cluster for debugging:  E2E_KEEP_CLUSTER=true make e2e
->>>>>>> origin/main

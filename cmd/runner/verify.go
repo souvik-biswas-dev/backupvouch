@@ -244,7 +244,11 @@ func RunVerify(ctx context.Context) error {
 
 	// Start Postgres listening ONLY on the Unix socket, no network interface (-h '')
 	pgCtlOpts := fmt.Sprintf("-k %s -h ''", socketDir)
-	startCmd := exec.CommandContext(ctx, "pg_ctl", "-D", dataDir, "-o", pgCtlOpts, "-w", "start")
+	// -l sends the server's output to a file. Without it the server keeps our output pipe open after
+	// pg_ctl returns, and CombinedOutput never finishes. WaitDelay is a second guard against that.
+	startCmd := exec.CommandContext(ctx, "pg_ctl", "-D", dataDir, "-o", pgCtlOpts,
+		"-l", filepath.Join(cfg.ScratchDir, "postgres.log"), "-w", "start")
+	startCmd.WaitDelay = 30 * time.Second
 	if out, err := startCmd.CombinedOutput(); err != nil {
 		res := BuildVerifyResult(backupv1alpha1.VerificationFailed, backupv1alpha1.ReasonRestoreFailed, 0, nil)
 		_ = writeTerminationLog(cfg.TerminationLog, res)

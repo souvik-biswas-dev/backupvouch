@@ -45,6 +45,7 @@ spec:
       labels:
         app: s3
     spec:
+      enableServiceLinks: false  # else Kubernetes sets S3_PORT=tcp://..., which SeaweedFS tries to parse
       containers:
         - name: seaweedfs
           image: chrislusf/seaweedfs:4.42
