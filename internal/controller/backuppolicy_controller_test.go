@@ -242,7 +242,7 @@ var _ = Describe("BackupPolicy Controller", func() {
 			Expect(k8sClient.Get(ctx, typeNamespacedName, fetched)).To(Succeed())
 			Expect(fetched.Status.Phase).To(Equal(backupv1alpha1.PhasePruning))
 			Expect(fetched.Status.LastVerification.Result).To(Equal(backupv1alpha1.VerificationPassed))
-			Expect(fetched.Status.LastVerification.RestoreDurationSeconds).To(Equal(int64(4)))
+			Expect(fetched.Status.LastVerification.RestoreDurationSeconds).To(Equal(int64(5)))
 
 			// Trigger reconcilePruning to create prune Job
 			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})

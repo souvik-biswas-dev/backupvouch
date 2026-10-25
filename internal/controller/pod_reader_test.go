@@ -114,3 +114,40 @@ func TestInspectJobPods(t *testing.T) {
 		t.Errorf("expected SecretMissing=true when waiting in CreateContainerConfigError >= 60s")
 	}
 }
+
+func TestInspectJobPodsUsesNewestPod(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+
+	now := time.Now()
+	newPod := func(name string, age time.Duration, message string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              name,
+				Namespace:         "default",
+				CreationTimestamp: metav1.NewTime(now.Add(-age)),
+				Labels:            map[string]string{"batch.kubernetes.io/job-name": "retry-job"},
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name:  "runner",
+					State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Message: message}},
+				}},
+			},
+		}
+	}
+
+	// The fake client lists by name. "a-new" sorts first although it is the newer Pod, so a reader that trusts
+	// list order would return the old message.
+	newest := newPod("a-new", 10*time.Second, `{"result":"Passed"}`)
+	oldest := newPod("b-old", 5*time.Minute, `{"result":"Failed","reason":"RestoreFailed"}`)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newest, oldest).Build()
+
+	inspection, err := InspectJobPods(context.Background(), c, "default", "retry-job", now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inspection.TerminationMessage != `{"result":"Passed"}` {
+		t.Errorf("TerminationMessage = %q, want the newest Pod's message", inspection.TerminationMessage)
+	}
+}
