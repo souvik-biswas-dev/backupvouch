@@ -197,7 +197,7 @@ func TestBuildResponseOrderAndSummary(t *testing.T) {
 
 	resp := BuildResponse([]backupv1alpha1.BackupPolicy{vouched, fresh, backupFailed, failed}, now)
 
-	var order []string
+	order := make([]string, 0, len(resp.Policies))
 	for _, p := range resp.Policies {
 		order = append(order, p.Name)
 	}
@@ -226,7 +226,7 @@ func TestNextRun(t *testing.T) {
 		mutate func(*backupv1alpha1.BackupPolicy)
 		want   *time.Time
 	}{
-		{"daily in UTC", nil, ptr(time.Date(2026, 10, 26, 2, 0, 0, 0, time.UTC))},
+		{"daily in UTC", nil, new(time.Date(2026, 10, 26, 2, 0, 0, 0, time.UTC))},
 		{"suspended policy has no next run", func(bp *backupv1alpha1.BackupPolicy) { bp.Spec.Suspend = true }, nil},
 		{"invalid schedule has no next run", func(bp *backupv1alpha1.BackupPolicy) { bp.Spec.Schedule = "not a cron" }, nil},
 		{"invalid time zone has no next run", func(bp *backupv1alpha1.BackupPolicy) { bp.Spec.TimeZone = "Mars/Olympus" }, nil},
@@ -244,8 +244,6 @@ func TestNextRun(t *testing.T) {
 		})
 	}
 }
-
-func ptr[T any](v T) *T { return &v }
 
 func TestResponseDoesNotLeakConnectionDetails(t *testing.T) {
 	bp := newPolicy("leaky", func(bp *backupv1alpha1.BackupPolicy) {

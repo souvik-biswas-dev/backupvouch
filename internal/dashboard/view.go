@@ -20,7 +20,8 @@ limitations under the License.
 package dashboard
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -240,7 +241,7 @@ func buildHistory(in []backupv1alpha1.RunRecord) []Run {
 			State:              runStateOf(r),
 		})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	slices.SortStableFunc(out, func(a, b Run) int { return a.At.Compare(b.At) })
 	return out
 }
 
@@ -267,14 +268,11 @@ func attentionRank(v Verdict) int {
 }
 
 func sortPolicies(ps []Policy) {
-	sort.SliceStable(ps, func(i, j int) bool {
-		ri, rj := attentionRank(ps[i].Verdict), attentionRank(ps[j].Verdict)
-		if ri != rj {
-			return ri < rj
-		}
-		if ps[i].Namespace != ps[j].Namespace {
-			return ps[i].Namespace < ps[j].Namespace
-		}
-		return ps[i].Name < ps[j].Name
+	slices.SortStableFunc(ps, func(a, b Policy) int {
+		return cmp.Or(
+			cmp.Compare(attentionRank(a.Verdict), attentionRank(b.Verdict)),
+			cmp.Compare(a.Namespace, b.Namespace),
+			cmp.Compare(a.Name, b.Name),
+		)
 	})
 }
