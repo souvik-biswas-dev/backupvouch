@@ -18,7 +18,7 @@ COPY internal/ internal/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o runner cmd/runner/*.go
 
 # Production runner image with PostgreSQL 16 tools
-FROM postgres:16.8-alpine3.21
+FROM postgres:18.1-alpine3.21
 
 LABEL org.opencontainers.image.source="https://github.com/souvik-biswas-dev/backupvouch" \
       org.opencontainers.image.description="BackupVouch runner for PostgreSQL 16"
