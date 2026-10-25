@@ -52,7 +52,7 @@ export function drawTrack(wrap, policy, opts) {
   // "now" and "next" are labelled in the tick row, so ticks that would collide with them are dropped.
   const xNow = x(opts.nowMs);
   const xNext = nextMs !== null && !far ? x(nextMs) : null;
-  const crowded = (px) => Math.abs(px - xNow) < 36 || (xNext !== null && Math.abs(px - xNext) < 36);
+  const crowded = (px) => Math.abs(px - xNow) < 60 || (xNext !== null && Math.abs(px - xNext) < 60);
   for (const t of tickTimes(lo, hi, step)) {
     const px = x(t);
     svg.append(s('line', { class: 'tick', x1: px, x2: px, y1: BASE, y2: BASE + 6 }));
