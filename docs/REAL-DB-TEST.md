@@ -45,8 +45,22 @@ And for any failure paste:
     kubectl logs -l backupvouch.pages.dev/role=verify --all-containers --tail=100
     kubectl logs -n backupvouch-system deploy/backupvouch-controller-manager --tail=100
 
-Remove hostnames and secrets first. Failure messages are built not to contain row data, but check before you share.
+Remove hostnames and secrets first. Failure messages never include text or row contents, but a failed check can show a boolean or a short number (for example `got "3"`), so check before you share.
 
 ## What counts as done
 
 Three different real databases (different size or content) each ran: a passing run, a deliberately failing check, and one broken-credential run, with clear messages every time. Until then call the project an early alpha.
+
+## Results (2026-10-25)
+
+Run on a kind cluster with the v0.1.0 `install.yaml`, PostgreSQL 16 sources, SeaweedFS as S3. The sample databases are public datasets (neondatabase/postgres-sample-dbs), not production data. Times are wall-clock Job durations.
+
+| Database | Source size | Dump size | Backup | Restore | Checks |
+|---|---|---|---|---|---|
+| Demo (`app`, 3 rows) | tiny | 2.9 kB | 11 s | 1 s | 2 passed |
+| Synthetic (4 extensions, 2 custom roles, 6M-row table) | 1006 MB | 158 MB | 17 s | 13 to 26 s | 5 passed |
+| Chinook (media store) | 9.9 MB | 163 kB | 4 s | 1 s | 2 passed |
+| Lego (580k-row table) | 43 MB | 3.1 MB | 4 s | 1 s | 2 passed |
+| Pagila (partitions, enums, full text) | 17 MB | 801 kB | 4 s | 1 s | 2 passed |
+
+For the demo, Chinook, Lego and Pagila databases: a deliberately wrong check gave `Failed` and named `must-fail`, and a wrong source password gave `BackupReady=False` with no hung Job. A wrong S3 key (demo database) gave `BackupReady=False` with a clear message. Deleting a running backup Job recreated it with no duplicate run, and restarting the operator mid-run finished the run (synthetic database). All recovered when the fault was removed. See `docs/KNOWN-LIMITATIONS.md` for what these runs showed.
